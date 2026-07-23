@@ -1,0 +1,231 @@
+{
+  "scan": {
+    "methods": [
+      "arp",
+      "ping"
+    ],
+    "basic_ports": [
+      22,
+      23,
+      80,
+      443,
+      8080,
+      8443
+    ],
+    "full_ports": [
+      21,
+      22,
+      23,
+      25,
+      53,
+      80,
+      110,
+      111,
+      135,
+      139,
+      143,
+      161,
+      389,
+      443,
+      445,
+      465,
+      514,
+      587,
+      631,
+      993,
+      995,
+      1433,
+      1521,
+      3306,
+      3389,
+      5432,
+      5900,
+      6379,
+      8080,
+      8443,
+      8888,
+      9000,
+      9090,
+      9200
+    ],
+    "default_profile": "basic",
+    "host_timeout": 1.0,
+    "max_workers": 64,
+    "include_offline": false,
+    "ping_first": true,
+    "demo": false
+  },
+  "detection": {
+    "hostname_patterns": [
+      {
+        "pattern": ".*router.*|.*gateway.*|.*modem.*",
+        "type": "Router"
+      },
+      {
+        "pattern": ".*camera.*|.*cam.*|.*ipcam.*",
+        "type": "IP Camera"
+      },
+      {
+        "pattern": ".*printer.*|.*print.*",
+        "type": "Printer"
+      },
+      {
+        "pattern": ".*tv.*|.*smart.*tv.*",
+        "type": "Smart TV"
+      },
+      {
+        "pattern": ".*nas.*|.*storage.*",
+        "type": "NAS"
+      },
+      {
+        "pattern": ".*phone.*|.*mobile.*",
+        "type": "Smartphone"
+      },
+      {
+        "pattern": ".*tablet.*|.*ipad.*",
+        "type": "Tablet"
+      },
+      {
+        "pattern": ".*laptop.*|.*notebook.*",
+        "type": "Laptop"
+      },
+      {
+        "pattern": ".*desktop.*|.*pc.*",
+        "type": "Desktop"
+      },
+      {
+        "pattern": ".*xbox.*|.*playstation.*|.*nintendo.*",
+        "type": "Gaming Console"
+      },
+      {
+        "pattern": ".*ap.*|.*access.*point.*|.*unifi.*",
+        "type": "Access Point"
+      },
+      {
+        "pattern": ".*switch.*|.*managed.*",
+        "type": "Switch"
+      }
+    ],
+    "vendor_patterns": [
+      {
+        "pattern": "Apple.*",
+        "type": "Smartphone",
+        "conditions": [
+          "iphone",
+          "ios"
+        ]
+      },
+      {
+        "pattern": "Apple.*",
+        "type": "Tablet",
+        "conditions": [
+          "ipad"
+        ]
+      },
+      {
+        "pattern": "Apple.*",
+        "type": "Laptop",
+        "conditions": [
+          "macbook",
+          "mac"
+        ]
+      },
+      {
+        "pattern": "Samsung.*",
+        "type": "Smartphone",
+        "conditions": [
+          "galaxy",
+          "android"
+        ]
+      },
+      {
+        "pattern": "Samsung.*",
+        "type": "Smart TV",
+        "conditions": [
+          "tv",
+          "display"
+        ]
+      },
+      {
+        "pattern": "LG.*",
+        "type": "Smart TV",
+        "conditions": [
+          "tv",
+          "display"
+        ]
+      },
+      {
+        "pattern": "Sony.*",
+        "type": "Gaming Console",
+        "conditions": [
+          "playstation"
+        ]
+      },
+      {
+        "pattern": "Microsoft.*",
+        "type": "Gaming Console",
+        "conditions": [
+          "xbox"
+        ]
+      },
+      {
+        "pattern": "TP-Link.*|TpLink.*",
+        "type": "Router"
+      },
+      {
+        "pattern": "ASUSTek.*|Asus.*",
+        "type": "Router"
+      },
+      {
+        "pattern": "Netgear.*",
+        "type": "Router"
+      },
+      {
+        "pattern": "Ubiquiti.*|Ubnt.*",
+        "type": "Access Point"
+      },
+      {
+        "pattern": "Xiaomi.*",
+        "type": "Smartphone"
+      },
+      {
+        "pattern": "Raspberry.*",
+        "type": "Raspberry Pi"
+      },
+      {
+        "pattern": "Dyson.*",
+        "type": "Smart Home"
+      },
+      {
+        "pattern": "Petkit.*",
+        "type": "Pet Feeder"
+      },
+      {
+        "pattern": "Espressif.*|Xiaomi.*|Tuya.*",
+        "type": "IoT Device"
+      },
+      {
+        "pattern": "Hikvision.*|Dahua.*",
+        "type": "IP Camera"
+      }
+    ],
+    "port_rules": {
+      "554": "IP Camera",
+      "8554": "IP Camera",
+      "631": "Printer",
+      "9100": "Printer",
+      "515": "Printer",
+      "3389": "Desktop",
+      "22": "Server",
+      "23": "Network Gear",
+      "161": "Network Gear",
+      "80": "Web Device",
+      "443": "Web Device"
+    },
+    "confidence_threshold": 0.5
+  },
+  "ui": {
+    "language": "tr",
+    "theme": "dark"
+  }
+}

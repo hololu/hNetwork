@@ -1,0 +1,30 @@
+[project]
+name = "hnetwork"
+version = "2.0.0"
+description = "hnetwork - Multi-interface / multi-VLAN network scanner with a modern web dashboard"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "flask>=3.0.0",
+    "scapy>=2.5.0",
+    "python-nmap>=0.7.1",
+    "psutil>=5.9.0",
+]
+
+[project.optional-dependencies]
+# Optional, only needed for live online vendor fallback
+online = ["requests>=2.31.0"]
+
+[project.scripts]
+hnetwork = "hnetwork.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hnetwork"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"hnetwork/templates" = "hnetwork/templates"
+"hnetwork/static" = "hnetwork/static"

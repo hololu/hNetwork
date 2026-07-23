@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>hnetwork &mdash; Ağ Tarayıcı</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>" />
+  <style>
+    :root{
+      --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2a313c;
+      --txt:#e6edf3; --muted:#8b949e; --accent:#3fb950; --accent2:#58a6ff;
+      --warn:#d29922; --danger:#f85149; --chip:#21262d;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);font-size:14px}
+    header{display:flex;align-items:center;gap:12px;padding:14px 22px;background:linear-gradient(90deg,#161b22,#10151c);border-bottom:1px solid var(--border)}
+    header h1{font-size:18px;margin:0;letter-spacing:.5px}
+    header .badge{font-size:11px;color:var(--muted);border:1px solid var(--border);padding:2px 8px;border-radius:20px}
+    header .spacer{flex:1}
+    .wrap{max-width:1280px;margin:0 auto;padding:18px 22px 60px}
+    .grid{display:grid;grid-template-columns:360px 1fr;gap:18px}
+    @media(max-width:900px){.grid{grid-template-columns:1fr}}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px}
+    .card h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:0 0 12px}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    select,input[type=text]{background:var(--panel2);border:1px solid var(--border);color:var(--txt);padding:8px 10px;border-radius:8px;font-size:13px;outline:none}
+    select:focus,input:focus{border-color:var(--accent2)}
+    button{cursor:pointer;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;background:var(--accent2);color:#08111d;transition:.15s}
+    button:hover{filter:brightness(1.1)}
+    button.ghost{background:transparent;border:1px solid var(--border);color:var(--txt)}
+    button.danger{background:var(--danger);color:#fff}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .iface{border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--panel2)}
+    .iface .top{display:flex;justify-content:space-between;align-items:center}
+    .iface .name{font-weight:700}
+    .tag{font-size:10px;padding:1px 7px;border-radius:10px;background:var(--chip);color:var(--muted);border:1px solid var(--border)}
+    .iface .meta{font-size:11px;color:var(--muted);margin-top:4px}
+    .iface label{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);margin-top:6px;cursor:pointer}
+    .vlan{display:inline-block;font-size:11px;background:var(--chip);border:1px solid var(--border);border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;cursor:pointer}
+    .vlan:hover{border-color:var(--accent2)}
+    .pill{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;background:var(--chip);border:1px solid var(--border);margin:2px}
+    .stat{display:flex;gap:14px;flex-wrap:wrap}
+    .stat .box{flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px}
+    .stat .num{font-size:24px;font-weight:700;color:var(--accent)}
+    .stat .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border)}
+    th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;background:var(--panel)}
+    tbody tr:hover{background:var(--panel2)}
+    .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+    .on{background:var(--accent)} .off{background:var(--muted)}
+    .progress{height:6px;background:var(--panel2);border-radius:6px;overflow:hidden;margin-top:8px}
+    .progress > div{height:100%;background:var(--accent);width:0;transition:width .3s}
+    .log{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted);max-height:150px;overflow:auto;background:#0a0e14;border-radius:8px;padding:8px}
+    .log div{margin:1px 0}
+    .notice{background:#2d2a1a;border:1px solid var(--warn);color:#f0d58a;padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:12px}
+    .btn-row{display:flex;gap:8px;margin-top:12px}
+    .type-cell{font-weight:600}
+    .ports{font-size:11px;color:var(--muted)}
+    .empty{color:var(--muted);text-align:center;padding:40px}
+    a{color:var(--accent2)}
+  </style>
+</head>
+<body>
+  <header>
+    <span style="font-size:22px">🌐</span>
+    <h1>hnetwork</h1>
+    <span class="badge" id="ver">v2.0.0</span>
+    <div class="spacer"></div>
+    <span class="badge" id="mode">mod: —</span>
+  </header>
+
+  <div class="wrap">
+    <div class="grid">
+      <!-- LEFT: configuration -->
+      <div>
+        <div class="card">
+          <h2>Arayüzler & VLAN</h2>
+          <div id="ifaces"><div class="empty">Yükleniyor…</div></div>
+          <div class="row" style="margin-top:10px">
+            <input type="text" id="customTarget" placeholder="eth0, eth0.10, 10.0.0.0/24" style="flex:1;min-width:160px">
+            <button class="ghost" id="addCustom">+ Ekle</button>
+          </div>
+          <div id="selected" class="row" style="margin-top:10px"></div>
+        </div>
+
+        <div class="card">
+          <h2>Tarama Seçenekleri</h2>
+          <div class="row" style="margin-bottom:10px">
+            <label class="pill">Profil:
+              <select id="profile" style="margin-left:6px">
+                <option value="basic">Basic (hızlı)</option>
+                <option value="full">Full (tüm portlar)</option>
+              </select>
+            </label>
+            <label class="pill"><input type="checkbox" id="includeOffline"> Çevrimdışı dahil</label>
+          </div>
+          <div class="btn-row">
+            <button id="startBtn">▶ Taramayı Başlat</button>
+            <button class="danger" id="stopBtn" disabled>■ Durdur</button>
+            <button class="ghost" id="demoBtn">Demo Mod</button>
+          </div>
+          <div class="progress"><div id="bar"></div></div>
+        </div>
+
+        <div class="card">
+          <h2>Canlı Log</h2>
+          <div class="log" id="log"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: results -->
+      <div>
+        <div id="notice"></div>
+        <div class="card">
+          <h2>Özet</h2>
+          <div class="stat">
+            <div class="box"><div class="num" id="sTotal">0</div><div class="lbl">Cihaz</div></div>
+            <div class="box"><div class="num" id="sOnline">0</div><div class="lbl">Çevrimiçi</div></div>
+            <div class="box"><div class="num" id="sTargets">0</div><div class="lbl">Hedef</div></div>
+            <div class="box"><div class="num" id="sTypes">0</div><div class="lbl">Cihaz Tipi</div></div>
+          </div>
+          <div id="typeBreak" class="row" style="margin-top:12px"></div>
+        </div>
+
+        <div class="card">
+          <h2>Cihazlar</h2>
+          <input type="text" id="search" placeholder="🔍 Ara (ip, host, vendor, tip)…" style="width:100%;margin-bottom:10px">
+          <div style="max-height:520px;overflow:auto">
+            <table id="tbl">
+              <thead><tr><th>Durum</th><th>IP</th><th>MAC</th><th>Hostname</th><th>Vendor</th><th>Tip</th><th>Portlar</th></tr></thead>
+              <tbody id="tbody"><tr><td colspan="7" class="empty">Henüz tarama yapılmadı.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const state = { targets: new Set(), devices: [] };
+
+async function loadInterfaces(){
+  try{
+    const [ifR, vlR] = await Promise.all([fetch('/api/interfaces').then(r=>r.json()), fetch('/api/vlans').then(r=>r.json())]);
+    const box = document.getElementById('ifaces');
+    box.innerHTML = '';
+    if(!ifR.length){ box.innerHTML = '<div class="empty">Arayüz bulunamadı</div>'; }
+    const vlanByParent = {};
+    vlR.forEach(v=>{ (vlanByParent[v.parent]=vlanByParent[v.parent]||[]).push(v); });
+    ifR.forEach(i=>{
+      const el = document.createElement('div');
+      el.className='iface';
+      const vlans = (vlanByParent[i.name]||[]).map(v=>`<span class="vlan" data-t="${i.name}.${v.vlan_id}">VLAN ${v.vlan_id}</span>`).join('') || '<span class="muted">—</span>';
+      el.innerHTML = `
+        <div class="top"><span class="name">${i.name}</span><span class="tag">${i.type}</span></div>
+        <div class="meta">${i.ip} · ${i.cidr}${i.default_gw?' · gw '+i.default_gw:''}</div>
+        <label><input type="checkbox" class="ifchk" value="${i.name}"> Bu arayüzü tara</label>
+        <div style="margin-top:6px">${vlans}</div>`;
+      box.appendChild(el);
+    });
+    box.querySelectorAll('.ifchk').forEach(c=>c.addEventListener('change',e=>{
+      if(e.target.checked) addTarget(e.target.value); else removeTarget(e.target.value);
+    }));
+    box.querySelectorAll('.vlan').forEach(v=>v.addEventListener('click',e=>{
+      const t=e.target.getAttribute('data-t'); addTarget(t); e.target.style.borderColor='var(--accent)'; e.target.style.color='var(--accent)';
+    }));
+  }catch(e){ document.getElementById('ifaces').innerHTML='<div class="empty">Hata: '+e+'</div>'; }
+}
+
+function addTarget(t){ state.targets.add(t); renderSelected(); }
+function removeTarget(t){ state.targets.delete(t); renderSelected(); }
+
+function renderSelected(){
+  const box=document.getElementById('selected');
+  box.innerHTML='';
+  state.targets.forEach(t=>{
+    const p=document.createElement('span'); p.className='pill'; p.style.cursor='pointer';
+    p.innerHTML=t+' ✕'; p.title='kaldır'; p.onclick=()=>removeTarget(t);
+    box.appendChild(p);
+  });
+  if(!state.targets.size) box.innerHTML='<span class="muted" style="font-size:12px">Seçili hedef yok</span>';
+}
+
+document.getElementById('addCustom').onclick=()=>{
+  const v=document.getElementById('customTarget').value.trim();
+  if(v){ v.split(',').forEach(x=>{ if(x.trim()) addTarget(x.trim()); }); document.getElementById('customTarget').value=''; }
+};
+document.getElementById('customTarget').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('addCustom').click(); });
+
+async function startScan(demo){
+  if(!state.targets.size){ alert('En az bir hedef seçin'); return; }
+  setRunning(true);
+  pushLog('Tarama başlatılıyor: '+[...state.targets].join(', '));
+  const res=await fetch('/api/scan',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({targets:[...state.targets], profile:document.getElementById('profile').value,
+      include_offline:document.getElementById('includeOffline').checked, demo:!!demo})});
+  if(!res.ok){ const j=await res.json().catch(()=>({})); pushLog('HATA: '+(j.error||res.status)); setRunning(false); return; }
+  poll();
+}
+
+let pollTimer=null;
+function poll(){
+  fetch('/api/progress').then(r=>r.json()).then(p=>{
+    if(p.phase==='done'||p.phase==='error'){ setRunning(false); refreshDevices(); }
+    else if(scanner_running()){ pollTimer=setTimeout(poll,700); }
+    updateProgress(p);
+  }).catch(()=>{ if(scanner_running()) pollTimer=setTimeout(poll,1500); });
+}
+function scanner_running(){ return document.getElementById('startBtn').disabled; }
+function updateProgress(p){
+  if(p.message) pushLog(p.message);
+  if(p.targets){ document.getElementById('sTargets').textContent=p.targets.length; }
+  const log=document.getElementById('log');
+  if(p.log){ log.innerHTML=p.log.map(l=>`<div>[${l.t}] ${l.msg}</div>`).join(''); log.scrollTop=log.scrollHeight; }
+  if(p.notice){ document.getElementById('notice').innerHTML=`<div class="notice">⚠️ ${p.notice.message||''}</div>`; document.getElementById('mode').textContent='mod: simülasyon'; }
+  if(p.phase==='discover-done') pushLog(`Keşif tamam: ${p.target} → ${p.found} cihaz`);
+}
+function setRunning(on){
+  document.getElementById('startBtn').disabled=on;
+  document.getElementById('stopBtn').disabled=!on;
+  document.getElementById('demoBtn').disabled=on;
+  if(on){ document.getElementById('bar').style.width='5%'; }
+}
+function pushLog(m){ const log=document.getElementById('log'); log.innerHTML+=`<div>[${new Date().toLocaleTimeString()}] ${m}</div>`; log.scrollTop=log.scrollHeight; }
+
+async function refreshDevices(){
+  const r=await fetch('/api/results').then(r=>r.json());
+  state.devices=r.devices||[];
+  document.getElementById('mode').textContent='mod: '+(r.simulated?'simülasyon':'gerçek');
+  renderDevices(); renderStats(r.counts||{});
+}
+function renderStats(c){
+  document.getElementById('sTotal').textContent=c.total||0;
+  document.getElementById('sOnline').textContent=c.online||0;
+  document.getElementById('sTypes').textContent=Object.keys(c.by_type||{}).length;
+  const tb=document.getElementById('typeBreak'); tb.innerHTML='';
+  Object.entries(c.by_type||{}).forEach(([k,v])=>{ const p=document.createElement('span'); p.className='pill'; p.innerHTML=`${k}: <b>${v}</b>`; tb.appendChild(p); });
+}
+function renderDevices(){
+  const q=document.getElementById('search').value.toLowerCase();
+  const tb=document.getElementById('tbody');
+  const list=state.devices.filter(d=>{
+    if(!q) return true; return [d.ip,d.hostname,d.vendor,d.device_type,d.mac].filter(Boolean).some(x=>x.toLowerCase().includes(q));
+  });
+  if(!list.length){ tb.innerHTML='<tr><td colspan="7" class="empty">Cihaz yok</td></tr>'; return; }
+  tb.innerHTML=list.map(d=>`
+    <tr>
+      <td><span class="dot ${d.status==='online'?'on':'off'}"></span>${d.status==='online'?'online':'offline'}</td>
+      <td>${d.ip}</td><td style="font-family:monospace;font-size:12px">${d.mac||'—'}</td>
+      <td>${d.hostname||'—'}</td><td>${d.vendor||'—'}</td>
+      <td class="type-cell">${d.device_type||'?'}</td>
+      <td class="ports">${(d.open_ports||[]).join(', ')||'—'}</td>
+    </tr>`).join('');
+}
+document.getElementById('search').addEventListener('input',renderDevices);
+document.getElementById('startBtn').onclick=()=>startScan(false);
+document.getElementById('demoBtn').onclick=()=>startScan(true);
+document.getElementById('stopBtn').onclick=()=>{ fetch('/api/stop',{method:'POST'}); pushLog('Durduruluyor…'); };
+
+loadInterfaces();
+</script>
+</body>
+</html>
