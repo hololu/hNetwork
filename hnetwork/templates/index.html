@@ -258,7 +258,12 @@ const PORT_TR = {
 function portLabel(p){ return PORT_TR[p] ? `${PORT_TR[p]} (${p})` : `Port ${p}`; }
 
 // --- port türüne göre açılacak referans ---
-function portUrl(p){ return `https://www.speedguide.net/port.php?port=${p}`; }
+function portUrl(ip, p){
+  // 80 -> http://ip , 443 -> https://ip , diger -> http://ip:port
+  if(p == 443) return `https://${ip}`;
+  if(p == 80)  return `http://${ip}`;
+  return `http://${ip}:${p}`;
+}
 
 async function loadInterfaces(){
   try{
@@ -452,7 +457,7 @@ function renderDevices(){
       <td>${d.ip}</td><td style="font-family:monospace;font-size:12px">${d.mac||'—'}</td>
       <td>${d.hostname||'—'}</td><td>${d.vendor||'—'}</td>
       <td class="type-cell"><span class="pill click mini" onclick="quickType('${(d.device_type||'').replace(/'/g,'')}')">${tr(d.device_type)}</span></td>
-      <td class="ports">${(d.open_ports||[]).length ? (d.open_ports||[]).map(p=>`<a class="port-chip" href="${portUrl(p)}" target="_blank" rel="noopener" title="${portLabel(p)} — yeni sekmede aç">${p}</a>`).join(' ') : '<span class="muted">—</span>'}</td>
+      <td class="ports">${(d.open_ports||[]).length ? (d.open_ports||[]).map(p=>`<a class="port-chip" href="${portUrl(d.ip, p)}" target="_blank" rel="noopener" title="${portLabel(p)} — yeni sekmede aç">${p}</a>`).join(' ') : '<span class="muted">—</span>'}</td>
     </tr>`).join('');
   renderPager(total, pages);
 }
