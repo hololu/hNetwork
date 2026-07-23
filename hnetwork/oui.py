@@ -274,19 +274,17 @@ class OUILookup:
         # 2) built-in compact table (works offline without IEEE file)
         for length in (8, 11, 14):
             key = mac[:length]
-            if key in self.cache:
-                return self.cache[key]
             if key in BUILTIN_OUI:
                 return BUILTIN_OUI[key]
+            if key in self.cache and self.cache[key] != "Unknown":
+                return self.cache[key]
         for length in (6, 9, 12):
             key = bare[:length]
             if key in BUILTIN_OUI:
                 return BUILTIN_OUI[key]
+        # 3) randomized / locally-administered MAC (2nd nibble = 2,6,A,E)
         if random_hint:
             return "Randomized MAC"
-        self.cache[mac[:8]] = "Unknown"
-        if len(self.cache) % 25 == 0:
-            self._save()
         return "Unknown"
 
 
@@ -306,6 +304,40 @@ def _clean_vendor(name: str) -> str:
             n = n[: -len(suf)]
             break
     return n.strip() or "Unknown"
+
+
+def import_oui_txt(src: str, dest: str | None = None) -> int:
+    """Merge a TAB/space separated 'OUI<sep>Vendor' file into ieee_oui.json.
+
+    Accepts lines like ``000C29\tVMware`` or ``00:0C:29 VMware``.
+    Entries from the file take precedence. Returns total record count.
+    """
+    dest = dest or os.path.join(_data_dir(), "ieee_oui.json")
+    try:
+        with open(dest, "r", encoding="utf-8") as fh:
+            db = json.load(fh)
+    except Exception:
+        db = {}
+    with open(src, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            line = line.rstrip("\n")
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) < 2:
+                parts = line.split(None, 1)
+            if len(parts) < 2:
+                continue
+            oui = parts[0].strip().upper().replace(":", "").replace("-", "")
+            vendor = parts[1].strip()
+            if len(oui) == 6 and vendor:
+                db[oui] = vendor
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    with open(dest, "w", encoding="utf-8") as fh:
+        json.dump(db, fh, ensure_ascii=False)
+    global _oui
+    _oui = None  # force reload
+    return len(db)
 
 
 def download_ieee_oui(dest: str | None = None, url: str = "https://standards-oui.ieee.org/oui/oui.csv") -> int:

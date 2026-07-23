@@ -30,6 +30,8 @@ python -m hnetwork.web
 hnetwork --list-interfaces
 hnetwork eth0 eth0.10 192.168.1.0/24 --profile full
 hnetwork --demo            # simülasyon
+hnetwork --update-oui mac-vendor.txt   # MAC üretici DB'sini dosyadan güncelle
+hnetwork --update-oui                  # IEEE'den online güncelle
 ```
 
 > Gerçek tarama (ARP/port) için **root** yetkisi ve **nmap** gereklidir.

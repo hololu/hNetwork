@@ -25,11 +25,23 @@ def main(argv=None):
     p.add_argument("-o", "--offline", action="store_true", help="include offline hosts")
     p.add_argument("--demo", action="store_true", help="force simulated scan")
     p.add_argument("--list-interfaces", action="store_true", help="list interfaces + vlans and exit")
+    p.add_argument("--update-oui", metavar="FILE", nargs="?", const="__download__",
+                   help="update MAC vendor DB: from FILE (OUI<tab>Vendor) or IEEE online if no file")
     p.add_argument("--json", action="store_true", help="output JSON")
     p.add_argument("-s", "--save", help="save results to file")
     args = p.parse_args(argv)
 
     sc = Scanner()
+
+    if args.update_oui:
+        from .oui import import_oui_txt, download_ieee_oui
+        if args.update_oui == "__download__":
+            n = download_ieee_oui()
+            print(f"IEEE OUI online güncellendi: {n} kayıt")
+        else:
+            n = import_oui_txt(args.update_oui)
+            print(f"OUI DB güncellendi ({args.update_oui}): {n} kayıt")
+        return 0
 
     if args.list_interfaces:
         iface = sc.interfaces()
