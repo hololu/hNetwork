@@ -232,8 +232,15 @@ def parse_targets(spec: str) -> List[str]:
             continue
         # VLAN sub-interface
         if re.match(r"^[\w]+(\.\d+|:vlan\d+)$", piece):
-            base, _, vid = re.split(r"\.|:vlan", piece)
-            vid = int(re.sub(r"\D", "", vid))
+            if ".vlan" in piece or piece.endswith(".vlan"):
+                base, vid = piece.rsplit(".vlan", 1)
+                vid = int(re.sub(r"\D", "", vid) or 0)
+            elif "." in piece:
+                base, vid = piece.split(".", 1)
+                vid = int(re.sub(r"\D", "", vid) or 0)
+            else:
+                base, vid = re.split(r":vlan", piece)
+                vid = int(re.sub(r"\D", "", vid) or 0)
             cidr = cidr_for_vlan(base, vid) or cidr_for_interface(base)
             if cidr:
                 targets.append(cidr)
