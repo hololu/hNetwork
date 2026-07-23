@@ -174,13 +174,13 @@ def api_export(fmt):
         )
     if fmt == "txt":
         lines = [f"hnetwork tarama raporu — {ts}",
-                 f"Toplam cihaz: {len(devices)}", "=" * 70]
+                 f"Toplam cihaz: {len(devices)}", f"IP{' '*(15-2)}MAC{' '*(17-3)}TİP{' '*(15-3)}"
+                 f"VENDOR{' '*(21-6)}HOST  PORTLAR", "=" * 78]
         for d in devices:
             ports = ", ".join(str(p) for p in d.get("open_ports", [])) or "-"
             lines.append(
-                f"{d.get('ip',''):<16} {d.get('mac',''):<18} {d.get('device_type',''):<16} "
-                f"{d.get('vendor','') or '-':<22} {d.get('hostname','') or '-'}\n"
-                f"    portlar: {ports}"
+                f"{d.get('ip',''):<16}{d.get('mac',''):<18}{(d.get('device_type','') or '-'):<16}"
+                f"{(d.get('vendor','') or '-'):<22}{(d.get('hostname','') or '-'):<14}{ports}"
             )
         return Response(
             "\n".join(lines),
