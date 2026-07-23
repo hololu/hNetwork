@@ -13,6 +13,8 @@
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);font-size:14px}
+    body.menu-collapsed .grid{grid-template-columns:0 1fr}
+    body.menu-collapsed .sidebar{display:none}
     header{display:flex;align-items:center;gap:12px;padding:14px 22px;background:linear-gradient(90deg,#161b22,#10151c);border-bottom:1px solid var(--border)}
     header h1{font-size:18px;margin:0;letter-spacing:.5px}
     header .badge{font-size:11px;color:var(--muted);border:1px solid var(--border);padding:2px 8px;border-radius:20px}
@@ -56,7 +58,7 @@
     .notice{background:#2d2a1a;border:1px solid var(--warn);color:#f0d58a;padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:12px}
     .btn-row{display:flex;gap:8px;margin-top:12px}
     .type-cell{font-weight:600}
-    .ports{font-size:11px;color:var(--muted)}
+    .ports{font-size:12px;color:var(--accent2);font-family:'Consolas','Monaco',monospace;font-weight:500}
     .empty{color:var(--muted);text-align:center;padding:40px}
     a{color:var(--accent2)}
     /* --- UI enhancements --- */
@@ -73,10 +75,14 @@
     .filter-info{font-size:12px;font-weight:400;color:var(--muted);margin-left:8px}
     .filter-info .clearf{cursor:pointer;color:var(--accent);text-decoration:underline;margin-left:4px}
     #bar{transition:width .3s ease}
+    .port-chip{display:inline-block;font-family:'Consolas','Monaco',monospace;font-size:11px;
+      color:var(--accent2);background:rgba(88,166,255,.13);border:1px solid rgba(88,166,255,.35);
+      border-radius:5px;padding:1px 6px;margin:1px 1px}
   </style>
 </head>
 <body>
   <header>
+    <button class="ghost sm" id="menuToggle" title="Sol menüyü aç/kapat" style="font-size:18px;padding:2px 10px">☰</button>
     <span style="font-size:22px">🌐</span>
     <h1>hnetwork</h1>
     <span class="badge" id="ver">v2.0.0</span>
@@ -87,7 +93,7 @@
   <div class="wrap">
     <div class="grid">
       <!-- LEFT: configuration -->
-      <div>
+      <div class="sidebar">
         <div class="card">
           <h2>Arayüzler & VLAN</h2>
           <div class="row" style="margin-bottom:8px;gap:6px">
@@ -127,6 +133,23 @@
         </div>
 
         <div class="card">
+          <h2>⏱ Periyodik Otomatik Tarama</h2>
+          <label class="pill" style="display:inline-flex;align-items:center;gap:6px">
+            <input type="checkbox" id="schedEnabled"> Etkin
+          </label>
+          <label class="pill">Aralık:
+            <select id="schedInterval" style="margin-left:6px">
+              <option value="60">1 dakika</option>
+              <option value="300" selected>5 dakika</option>
+              <option value="600">10 dakika</option>
+              <option value="1800">30 dakika</option>
+              <option value="3600">1 saat</option>
+            </select>
+          </label>
+          <div class="muted" id="schedInfo" style="font-size:12px;margin-top:8px">Kapalı</div>
+        </div>
+
+        <div class="card">
           <h2>Canlı Log</h2>
           <div class="log" id="log"></div>
         </div>
@@ -147,7 +170,13 @@
         </div>
 
         <div class="card">
-          <h2>Cihazlar <span id="filterInfo" class="filter-info"></span></h2>
+          <h2>Cihazlar <span id="filterInfo" class="filter-info"></span>
+            <span style="float:right;font-size:12px;font-weight:400">
+              <button class="ghost sm" onclick="doExport('txt')">⬇ TXT</button>
+              <button class="ghost sm" onclick="doExport('csv')">⬇ CSV</button>
+              <button class="ghost sm" onclick="doExport('json')">⬇ JSON</button>
+            </span>
+          </h2>
           <input type="text" id="search" placeholder="🔍 Ara (ip, host, vendor, tip)…" style="width:100%;margin-bottom:10px">
           <div style="max-height:520px;overflow:auto">
             <table id="tbl">
@@ -342,13 +371,60 @@ function renderDevices(){
       <td>${d.ip}</td><td style="font-family:monospace;font-size:12px">${d.mac||'—'}</td>
       <td>${d.hostname||'—'}</td><td>${d.vendor||'—'}</td>
       <td class="type-cell"><span class="pill click mini" onclick="quickType('${(d.device_type||'').replace(/'/g,'')}')">${d.device_type||'?'}</span></td>
-      <td class="ports">${(d.open_ports||[]).join(', ')||'—'}</td>
+      <td class="ports">${(d.open_ports||[]).length ? (d.open_ports||[]).map(p=>`<span class="port-chip">${p}</span>`).join(' ') : '<span class="muted">—</span>'}</td>
     </tr>`).join('');
 }
 function quickType(t){ state.typeFilter=t||null; if(state._lastCounts) renderStats(state._lastCounts); renderDevices(); window.scrollTo({top:0,behavior:'smooth'}); }
 document.getElementById('search').addEventListener('input',renderDevices);
 document.getElementById('startBtn').onclick=()=>startScan();
 document.getElementById('stopBtn').onclick=()=>{ fetch('/api/stop',{method:'POST'}); pushLog('Durduruluyor…'); };
+
+// --- sol menü aç/kapat (localStorage'da hatırlanır) ---
+function applyMenu(){ document.body.classList.toggle('menu-collapsed', localStorage.getItem('menuCollapsed')==='1'); }
+document.getElementById('menuToggle').onclick=()=>{
+  const c=!document.body.classList.contains('menu-collapsed');
+  localStorage.setItem('menuCollapsed', c?'1':'0'); applyMenu();
+};
+applyMenu();
+
+// --- export (TXT / CSV / JSON) ---
+function doExport(fmt){
+  if(!state.devices.length){ alert('Önce bir tarama yapın'); return; }
+  window.location.href='/api/export/'+fmt;
+}
+
+// --- periyodik otomatik tarama ---
+async function pushSchedule(){
+  const enabled=document.getElementById('schedEnabled').checked;
+  const interval=parseInt(document.getElementById('schedInterval').value,10);
+  if(enabled && !state.targets.size){
+    alert('Periyodik tarama için önce en az bir hedef seçin');
+    document.getElementById('schedEnabled').checked=false; return;
+  }
+  const r=await fetch('/api/schedule',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({enabled, interval, targets:[...state.targets],
+      profile:document.getElementById('profile').value})}).then(r=>r.json());
+  renderSchedule(r);
+}
+function renderSchedule(s){
+  const info=document.getElementById('schedInfo');
+  if(!s.enabled){ info.textContent='Kapalı'; info.style.color='var(--muted)'; return; }
+  const mins=Math.round(s.interval/60*10)/10;
+  const tgt=(s.targets||[]).length;
+  info.innerHTML=`✅ Etkin · her ${mins} dk · ${tgt} hedef`+
+    (s.last_run?`<br>Son tarama: ${new Date(s.last_run).toLocaleTimeString()}`:'');
+  info.style.color='var(--accent)';
+}
+document.getElementById('schedEnabled').addEventListener('change',pushSchedule);
+document.getElementById('schedInterval').addEventListener('change',()=>{ if(document.getElementById('schedEnabled').checked) pushSchedule(); });
+fetch('/api/schedule').then(r=>r.json()).then(renderSchedule).catch(()=>{});
+
+// auto-refresh device table when a scheduled scan finishes
+let _lastFinished=null;
+setInterval(()=>{ if(!scanner_running()){ fetch('/api/results').then(r=>r.json()).then(r=>{
+  if(r.finished && r.finished!==_lastFinished){ _lastFinished=r.finished;
+    state.devices=r.devices||[]; renderDevices(); renderStats(r.counts||{});
+    fetch('/api/schedule').then(r=>r.json()).then(renderSchedule); } }).catch(()=>{}); } }, 5000);
 
 loadInterfaces();
 </script>
