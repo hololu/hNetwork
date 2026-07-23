@@ -227,4 +227,10 @@ def run(host="0.0.0.0", port=5883, debug=False):
 
 
 if __name__ == "__main__":
-    run()
+    import argparse
+    ap = argparse.ArgumentParser(description="hnetwork web server")
+    ap.add_argument("--host", default="0.0.0.0", help="bind address")
+    ap.add_argument("--port", type=int, default=5883, help="listen port")
+    ap.add_argument("--debug", action="store_true")
+    a = ap.parse_args()
+    run(host=a.host, port=a.port, debug=a.debug)

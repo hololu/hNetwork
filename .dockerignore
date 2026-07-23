@@ -1,0 +1,9 @@
+.venv
+__pycache__
+*.pyc
+.git
+.gitignore
+*.tar.gz
+data/oui_cache.json
+hnetwork_backup_*.tar.gz
+BUILD_REPORT.md

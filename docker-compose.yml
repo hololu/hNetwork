@@ -1,0 +1,38 @@
+# hnetwork — Proxmox (CT/VM) ve CasaOS (Raspberry Pi / ARM) için
+# Çalıştırma:
+#   docker compose up -d
+# Arayüz: http://<sunucu-ip>:5883
+#
+# NOT: host network modu, container'ın sunucudaki TÜM arayüzleri/VLANları
+# görmesini sağlar (gerçek çoklu arayüz + VLAN taraması için gerekli).
+# Bridge mod kullanırsanız sadece sunucu IP'si taranır.
+
+services:
+  hnetwork:
+    # Image doğrudan çekilebilir (varsa) veya yerelde build edilir:
+    # image: ghcr.io/hololu/hnetwork:latest
+    build:
+      context: .
+      platforms:
+        - linux/amd64      # x86_64 — Proxmox
+        - linux/arm64      # Raspberry Pi / ARM — CasaOS
+    image: hnetwork:local
+    container_name: hnetwork
+    # --- Ağ: host modu (tüm arayüz/VLAN görünür) ---
+    network_mode: host
+    # Bridge isterseniz host yerine bunu açın ve ports ekleyin:
+    # ports:
+    #   - "5883:5883"
+    restart: unless-stopped
+    # Gerçek tarama (ARP) için root gerekir; container varsayılan root ile çalışır.
+    # Gerekirse ek yetkiler:
+    # cap_add:
+    #   - NET_RAW
+    #   - NET_ADMIN
+    volumes:
+      - hnetwork-data:/app/data        # OUI veritabanı + tarama sonuçları kalıcı
+    # Yerel dosya istiyorsanız:
+    # - ./data:/app/data
+
+volumes:
+  hnetwork-data:
