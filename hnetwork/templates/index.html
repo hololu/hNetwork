@@ -11,11 +11,18 @@
       --txt:#e6edf3; --muted:#8b949e; --accent:#3fb950; --accent2:#58a6ff;
       --warn:#d29922; --danger:#f85149; --chip:#21262d;
     }
+    /* --- açık tema --- */
+    body.theme-light{
+      --bg:#f4f6fa; --panel:#ffffff; --panel2:#eef1f6; --border:#d6dbe3;
+      --txt:#1c2128; --muted:#5b6470; --accent:#1a7f37; --accent2:#0969da;
+      --warn:#9a6700; --danger:#cf222e; --chip:#e7ebf0;
+    }
     *{box-sizing:border-box}
-    body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);font-size:14px}
+    body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);font-size:14px;transition:background .2s,color .2s}
     body.menu-collapsed .grid{grid-template-columns:1fr}
     body.menu-collapsed .sidebar{display:none}
     header{display:flex;align-items:center;gap:12px;padding:14px 22px;background:linear-gradient(90deg,#161b22,#10151c);border-bottom:1px solid var(--border)}
+    body.theme-light header{background:linear-gradient(90deg,#ffffff,#eef1f6)}
     header h1{font-size:18px;margin:0;letter-spacing:.5px}
     header .badge{font-size:11px;color:var(--muted);border:1px solid var(--border);padding:2px 8px;border-radius:20px}
     header .spacer{flex:1}
@@ -78,6 +85,12 @@
     .port-chip{display:inline-block;font-family:'Consolas','Monaco',monospace;font-size:11px;
       color:var(--accent2);background:rgba(88,166,255,.13);border:1px solid rgba(88,166,255,.35);
       border-radius:5px;padding:1px 6px;margin:1px 1px}
+    /* --- sayfalama --- */
+    .pager{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:12px;justify-content:space-between}
+    .pager .pages{display:flex;gap:4px;flex-wrap:wrap}
+    .pager button{padding:5px 10px;font-size:12px}
+    .pager button.active{background:var(--accent);color:#06121f;border-color:var(--accent)}
+    .pager .info{font-size:12px;color:var(--muted)}
   </style>
 </head>
 <body>
@@ -88,6 +101,7 @@
     <span class="badge" id="ver">v2.0.0</span>
     <div class="spacer"></div>
     <span class="badge" id="mode">mod: —</span>
+    <button class="ghost sm" id="themeToggle" title="Açık/Koyu tema" style="font-size:13px;padding:4px 10px">☀ Açık</button>
   </header>
 
   <div class="wrap">
@@ -184,13 +198,30 @@
               <tbody id="tbody"><tr><td colspan="7" class="empty">Henüz tarama yapılmadı.</td></tr></tbody>
             </table>
           </div>
+          <div class="row" style="margin-top:10px;gap:10px">
+            <label class="pill">Sayfada:
+              <select id="pageSize" style="margin-left:6px">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="0">Tümü</option>
+              </select>
+            </label>
+            <span class="muted" id="pageInfo" style="font-size:12px"></span>
+          </div>
+          <div class="pager" id="pager" style="display:none">
+            <button id="prevPage">‹ Önceki</button>
+            <div class="pages" id="pageBtns"></div>
+            <button id="nextPage">Sonraki ›</button>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
 <script>
-const state = { targets: new Set(), devices: [], typeFilter: null, ifaces: [], vlans: [] };
+const state = { targets: new Set(), devices: [], typeFilter: null, ifaces: [], vlans: [], page: 1, pageSize: 25 };
 
 async function loadInterfaces(){
   try{
@@ -329,6 +360,7 @@ function pushLog(m){ const log=document.getElementById('log'); log.innerHTML+=`<
 async function refreshDevices(){
   const r=await fetch('/api/results').then(r=>r.json());
   state.devices=r.devices||[];
+  state.page=1;
   document.getElementById('mode').textContent='mod: gerçek tarama';
   renderDevices(); renderStats(r.counts||{});
 }
@@ -342,30 +374,42 @@ function renderStats(c){
   const all=document.createElement('span');
   all.className='pill click'+(state.typeFilter===null?' active':'');
   all.innerHTML=`Tümü: <b>${c.total||0}</b>`;
-  all.onclick=()=>{ state.typeFilter=null; renderStats(c); renderDevices(); };
+  all.onclick=()=>{ state.typeFilter=null; state.page=1; renderStats(c); renderDevices(); };
   tb.appendChild(all);
   entries.forEach(([k,v])=>{
     const p=document.createElement('span');
     p.className='pill click'+(state.typeFilter===k?' active':'');
     p.innerHTML=`${k}: <b>${v}</b>`;
     p.title=`"${k}" cihazlarını göster`;
-    p.onclick=()=>{ state.typeFilter=(state.typeFilter===k?null:k); renderStats(c); renderDevices(); };
+    p.onclick=()=>{ state.typeFilter=(state.typeFilter===k?null:k); state.page=1; renderStats(c); renderDevices(); };
     tb.appendChild(p);
   });
   state._lastCounts=c;
 }
 function renderDevices(){
   const q=document.getElementById('search').value.toLowerCase();
-  const tb=document.getElementById('tbody');
   const list=state.devices.filter(d=>{
     if(state.typeFilter && d.device_type!==state.typeFilter) return false;
     if(!q) return true; return [d.ip,d.hostname,d.vendor,d.device_type,d.mac].filter(Boolean).some(x=>x.toLowerCase().includes(q));
   });
+  state._filtered=list;
+  // page size
+  state.pageSize = parseInt(document.getElementById('pageSize').value,10);
+  const total=list.length;
+  const ps=state.pageSize||total;       // 0 = all
+  const pages=Math.max(1, Math.ceil(total/ps));
+  if(state.page>pages) state.page=pages;
+  if(state.page<1) state.page=1;
+  const start=(state.page-1)*ps;
+  const slice=list.slice(start, ps?start+ps:undefined);
+
   const fInfo=document.getElementById('filterInfo');
-  if(fInfo) fInfo.innerHTML = state.typeFilter ? `Filtre: <b>${state.typeFilter}</b> (${list.length}) <span class="clearf">✕ temizle</span>` : '';
+  if(fInfo) fInfo.innerHTML = state.typeFilter ? `Filtre: <b>${state.typeFilter}</b> (${total}) <span class="clearf">✕ temizle</span>` : '';
   if(fInfo && state.typeFilter){ fInfo.querySelector('.clearf').onclick=()=>{ state.typeFilter=null; if(state._lastCounts) renderStats(state._lastCounts); renderDevices(); }; }
-  if(!list.length){ tb.innerHTML='<tr><td colspan="7" class="empty">Cihaz yok</td></tr>'; return; }
-  tb.innerHTML=list.map(d=>`
+
+  const tb=document.getElementById('tbody');
+  if(!slice.length){ tb.innerHTML='<tr><td colspan="7" class="empty">Cihaz yok</td></tr>'; renderPager(0,0); return; }
+  tb.innerHTML=slice.map(d=>`
     <tr>
       <td><span class="dot ${d.status==='online'?'on':'off'}"></span>${d.status==='online'?'online':'offline'}</td>
       <td>${d.ip}</td><td style="font-family:monospace;font-size:12px">${d.mac||'—'}</td>
@@ -373,9 +417,40 @@ function renderDevices(){
       <td class="type-cell"><span class="pill click mini" onclick="quickType('${(d.device_type||'').replace(/'/g,'')}')">${d.device_type||'?'}</span></td>
       <td class="ports">${(d.open_ports||[]).length ? (d.open_ports||[]).map(p=>`<span class="port-chip">${p}</span>`).join(' ') : '<span class="muted">—</span>'}</td>
     </tr>`).join('');
+  renderPager(total, pages);
 }
-function quickType(t){ state.typeFilter=t||null; if(state._lastCounts) renderStats(state._lastCounts); renderDevices(); window.scrollTo({top:0,behavior:'smooth'}); }
-document.getElementById('search').addEventListener('input',renderDevices);
+
+function renderPager(total, pages){
+  const pager=document.getElementById('pager');
+  const info=document.getElementById('pageInfo');
+  const btns=document.getElementById('pageBtns');
+  if(!total || pages<=1){ pager.style.display='none'; info.textContent=''; return; }
+  pager.style.display='flex';
+  info.textContent=`${total} kayıt · sayfa ${state.page}/${pages}`;
+  btns.innerHTML='';
+  const win=[];
+  const p=state.page, lo=Math.max(1,p-2), hi=Math.min(pages,p+2);
+  if(lo>1){ addPageBtn(1); if(lo>2) addSep(); }
+  for(let i=lo;i<=hi;i++) addPageBtn(i);
+  if(hi<pages){ if(hi<pages-1) addSep(); addPageBtn(pages); }
+  function addPageBtn(n){
+    const b=document.createElement('button'); b.textContent=n;
+    if(n===state.page) b.className='active';
+    b.onclick=()=>{ state.page=n; renderDevices(); };
+    btns.appendChild(b);
+  }
+  function addSep(){ const s=document.createElement('span'); s.textContent='…'; s.className='muted'; s.style.padding='0 4px'; btns.appendChild(s); }
+}
+function quickType(t){ state.typeFilter=t||null; state.page=1; if(state._lastCounts) renderStats(state._lastCounts); renderDevices(); window.scrollTo({top:0,behavior:'smooth'}); }
+document.getElementById('search').addEventListener('input',()=>{ state.page=1; renderDevices(); });
+document.getElementById('pageSize').addEventListener('change',()=>{ state.page=1; renderDevices(); });
+document.getElementById('prevPage').onclick=()=>{ if(state.page>1){ state.page--; renderDevices(); } };
+document.getElementById('nextPage').onclick=()=>{ state.page++; renderDevices(); };
+// --- tema (açık/koyu) localStorage'da hatırlanır ---
+function applyTheme(){ document.body.classList.toggle('theme-light', localStorage.getItem('theme')==='light'); updateThemeBtn(); }
+function updateThemeBtn(){ const light=document.body.classList.contains('theme-light'); const b=document.getElementById('themeToggle'); b.textContent=light?'🌙 Koyu':'☀ Açık'; }
+document.getElementById('themeToggle').onclick=()=>{ const light=document.body.classList.contains('theme-light'); localStorage.setItem('theme', light?'dark':'light'); applyTheme(); };
+applyTheme();
 document.getElementById('startBtn').onclick=()=>startScan();
 document.getElementById('stopBtn').onclick=()=>{ fetch('/api/stop',{method:'POST'}); pushLog('Durduruluyor…'); };
 
