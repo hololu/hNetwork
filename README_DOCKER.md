@@ -104,3 +104,53 @@ curl http://localhost:5883/   # HTML dönüyorsa hazır
 ```
 Tarayıcıdan `http://<sunucu-IP>:5883` açın → "Arayüzler & VLAN" kartında
 sunucudaki tüm arayüzler + VLAN'lar listelenir.
+
+---
+
+## 8) 🚀 Hazır `docker run` komutları (build gerekmez)
+
+En pratik yol — image'ı **siz build edip** container'ı tek satırda başlatırsınız.
+Aşağıdaki komutlar **multi-arch** değildir; çalıştırdığınız makinenin
+mimarisine uygun olanı kullının (Proxmox = amd64, Pi/CasaOS = arm64).
+
+### A) Proxmox (x86_64 / LXC-CT veya VM)
+```bash
+# 1) Image'ı build et (amd64)
+docker build -t hnetwork:local .
+# 2) Host network ile başlat (tüm arayüz/VLAN görünür)
+docker run -d --name hnetwork --network host --restart unless-stopped \
+  -v hnetwork-data:/app/data hnetwork:local
+# → http://<proxmox-CT-IP>:5883
+```
+
+### B) CasaOS / Raspberry Pi (ARM64)
+```bash
+# 1) Image'ı build et (arm64)
+docker build -t hnetwork:local .
+# 2) Host network ile başlat
+docker run -d --name hnetwork --network host --restart unless-stopped \
+  -v hnetwork-data:/app/data hnetwork:local
+# CasaOS arayüzü otomatik "hnetwork" kartını gösterir
+# → http://<pi-IP>:5883
+```
+
+### C) Bridge mod isterseniz (host yerine)
+```bash
+docker run -d --name hnetwork -p 5883:5883 --restart unless-stopped \
+  -v hnetwork-data:/app/data hnetwork:local
+```
+> ⚠️ Bridge modda container **sadece sunucunun kendi IP'sini** tarar.
+> Çoklu arayüz / VLAN taraması için **`--network host` (A/B) önerilir.**
+
+### D) Güncelleme
+```bash
+docker stop hnetwork && docker rm hnetwork
+docker build -t hnetwork:local .        # veya image'ı yeniden çekin
+docker run -d --name hnetwork --network host --restart unless-stopped \
+  -v hnetwork-data:/app/data hnetwork:local
+```
+
+> **Not:** `docker-compose.yml` hâlâ depoda — Portainer gibi
+> compose tabanlı panel kullanıyorsanız onu da kullanabilirsiniz
+> (bkz. bölüm 1-B / 2). Ancak tek-satır `docker run` çoğu
+> durumda daha hızlıdır.
