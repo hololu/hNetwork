@@ -23,7 +23,6 @@ def main(argv=None):
     p.add_argument("targets", nargs="*", help="interface / vlan / cidr (e.g. eth0 eth0.10 192.168.1.0/24)")
     p.add_argument("-p", "--profile", choices=["basic", "full"], default="basic")
     p.add_argument("-o", "--offline", action="store_true", help="include offline hosts")
-    p.add_argument("--demo", action="store_true", help="force simulated scan")
     p.add_argument("--list-interfaces", action="store_true", help="list interfaces + vlans and exit")
     p.add_argument("--update-oui", metavar="FILE", nargs="?", const="__download__",
                    help="update MAC vendor DB: from FILE (OUI<tab>Vendor) or IEEE online if no file")
@@ -55,7 +54,7 @@ def main(argv=None):
         # default: scan all non-loopback interfaces
         args.targets = [i["name"] for i in sc.interfaces()]
 
-    results = sc.scan(args.targets, profile=args.profile, include_offline=args.offline, demo=args.demo)
+    results = sc.scan(args.targets, profile=args.profile, include_offline=args.offline)
     devices = results["devices"]
 
     if args.json:

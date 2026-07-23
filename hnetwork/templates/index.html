@@ -118,7 +118,6 @@
           <div class="btn-row">
             <button id="startBtn">▶ Taramayı Başlat</button>
             <button class="danger" id="stopBtn" disabled>■ Durdur</button>
-            <button class="ghost" id="demoBtn">Demo Mod</button>
           </div>
           <div class="progress"><div id="bar"></div></div>
           <div class="row" style="justify-content:space-between;margin-top:6px">
@@ -250,13 +249,13 @@ document.getElementById('addCustom').onclick=()=>{
 };
 document.getElementById('customTarget').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('addCustom').click(); });
 
-async function startScan(demo){
+async function startScan(){
   if(!state.targets.size){ alert('En az bir hedef seçin'); return; }
   setRunning(true);
   pushLog('Tarama başlatılıyor: '+[...state.targets].join(', '));
   const res=await fetch('/api/scan',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({targets:[...state.targets], profile:document.getElementById('profile').value,
-      include_offline:document.getElementById('includeOffline').checked, demo:!!demo})});
+      include_offline:document.getElementById('includeOffline').checked})});
   if(!res.ok){ const j=await res.json().catch(()=>({})); pushLog('HATA: '+(j.error||res.status)); setRunning(false); return; }
   poll();
 }
@@ -294,7 +293,6 @@ function updateProgress(p){
 function setRunning(on){
   document.getElementById('startBtn').disabled=on;
   document.getElementById('stopBtn').disabled=!on;
-  document.getElementById('demoBtn').disabled=on;
   if(on){ setProgress(2,'Başlatılıyor…'); }
 }
 function pushLog(m){ const log=document.getElementById('log'); log.innerHTML+=`<div>[${new Date().toLocaleTimeString()}] ${m}</div>`; log.scrollTop=log.scrollHeight; }
@@ -302,7 +300,7 @@ function pushLog(m){ const log=document.getElementById('log'); log.innerHTML+=`<
 async function refreshDevices(){
   const r=await fetch('/api/results').then(r=>r.json());
   state.devices=r.devices||[];
-  document.getElementById('mode').textContent='mod: '+(r.simulated?'simülasyon':'gerçek');
+  document.getElementById('mode').textContent='mod: gerçek tarama';
   renderDevices(); renderStats(r.counts||{});
 }
 function renderStats(c){
@@ -349,8 +347,7 @@ function renderDevices(){
 }
 function quickType(t){ state.typeFilter=t||null; if(state._lastCounts) renderStats(state._lastCounts); renderDevices(); window.scrollTo({top:0,behavior:'smooth'}); }
 document.getElementById('search').addEventListener('input',renderDevices);
-document.getElementById('startBtn').onclick=()=>startScan(false);
-document.getElementById('demoBtn').onclick=()=>startScan(true);
+document.getElementById('startBtn').onclick=()=>startScan();
 document.getElementById('stopBtn').onclick=()=>{ fetch('/api/stop',{method:'POST'}); pushLog('Durduruluyor…'); };
 
 loadInterfaces();

@@ -28,7 +28,6 @@ DEFAULTS: Dict[str, Any] = {
         "max_workers": 64,
         "include_offline": False,
         "ping_first": True,   # ping before TCP port scan to skip dead hosts
-        "demo": False,        # synthesize devices when no privileges available
     },
     "detection": {
         "hostname_patterns": [

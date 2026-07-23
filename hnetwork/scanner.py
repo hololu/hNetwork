@@ -18,11 +18,9 @@ from __future__ import annotations
 import ipaddress
 import json
 import os
-import random
 import socket
 import subprocess
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
@@ -69,7 +67,6 @@ class Scanner:
         profile: str = "basic",
         include_offline: Optional[bool] = None,
         progress: Optional[ProgressCb] = None,
-        demo: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Run a scan over a list of target specs (interface / vlan / cidr).
 
@@ -79,7 +76,6 @@ class Scanner:
             raise RuntimeError("A scan is already running")
 
         cfg = self.config.scan
-        demo = cfg.get("demo", False) if demo is None else demo
         include_offline = cfg.get("include_offline", False) if include_offline is None else include_offline
         profile = profile or cfg.get("default_profile", "basic")
         ports = cfg.get("full_ports" if profile == "full" else "basic_ports", [])
@@ -98,21 +94,14 @@ class Scanner:
         emit({"phase": "start", "targets": [t["label"] for t in expanded], "total_hosts": total_hosts})
 
         try:
-            if demo:
-                emit({"phase": "notice", "mode": "simulated", "reason": "demo",
-                      "message": "Demo modu: simüle cihazlar üretiliyor (gerçek ağ taranmıyor)."})
-                devices = self._simulate(expanded, emit)
+            if _have_privileges() and _have_nmap():
+                emit({"phase": "notice", "mode": "real",
+                      "message": "Gerçek tarama (ARP + nmap) başlıyor."})
+                devices = self._real_scan(expanded, ports, include_offline, emit)
             else:
-                has_root = _have_privileges()
-                has_nmap = _have_nmap()
-                if has_root and has_nmap:
-                    emit({"phase": "notice", "mode": "real",
-                          "message": "Gerçek tarama (ARP + nmap) başlıyor."})
-                    devices = self._real_scan(expanded, ports, include_offline, emit)
-                else:
-                    emit({"phase": "notice", "mode": "real-lite",
-                          "message": "Root/nmap yok → saf-Python gerçek tarama (ping sweep + TCP socket + ARP tablosu)."})
-                    devices = self._real_scan_pure(expanded, ports, include_offline, emit)
+                emit({"phase": "notice", "mode": "real-lite",
+                      "message": "Root/nmap yok → saf-Python gerçek tarama (ping sweep + TCP socket + ARP tablosu)."})
+                devices = self._real_scan_pure(expanded, ports, include_offline, emit)
         finally:
             self.running = False
 
@@ -123,7 +112,6 @@ class Scanner:
             "started": started,
             "finished": finished,
             "profile": profile,
-            "simulated": demo,
             "counts": self._summarize(devices),
         }
         emit({"phase": "done", "counts": self.last_results["counts"], "device_count": len(devices)})
@@ -375,71 +363,6 @@ class Scanner:
             return socket.gethostbyaddr(ip)[0]
         except Exception:
             return ""
-
-    # ---------------- demo / simulation ---------------- #
-    def _simulate(self, targets, emit) -> List[Dict]:
-        """Synthesize realistic devices for UI testing without privileges."""
-        rng = random.Random(42)  # deterministic
-        pool = [
-            ("Router", "ASUSTek", "router.local", [22, 53, 80, 443]),
-            ("IP Camera", "Hikvision", "cam-front", [80, 443, 554]),
-            ("Printer", "HP", "office-printer", [80, 443, 631, 9100]),
-            ("Smart TV", "LG", "living-tv", [80, 443, 8001, 8443]),
-            ("Laptop", "Apple", "mert-macbook", [22, 445, 548]),
-            ("Smartphone", "Apple", "iphone-12", [443]),
-            ("NAS", "Synology", "nas-01", [22, 80, 443, 5000]),
-            ("Server", "Ubuntu", "srv-web", [22, 80, 443, 3306]),
-            ("IoT Device", "Tuya", "smart-plug", [80, 443]),
-            ("Gaming Console", "Sony", "ps5", [80, 443, 9307]),
-            ("Access Point", "Ubiquiti", "ap-office", [22, 80, 443]),
-            ("Desktop", "Dell", "pc-odasi", [3389, 445]),
-            ("Switch", "Cisco", "sw-core", [22, 23, 161]),
-            ("Raspberry Pi", "Raspberry Pi", "pi-cctv", [22, 80]),
-        ]
-        devices = []
-        for t in targets:
-            net = ipaddress.IPv4Network(t["cidr"])
-            hosts = list(net.hosts())
-            # pick a deterministic subset of hosts to "populate"
-            count = min(len(pool), max(3, rng.randint(4, len(pool))))
-            chosen = rng.sample(pool, count)
-            gateway = str(net.network_address + 1)
-            for idx, (dtype, vendor, base_host, ports) in enumerate(chosen):
-                ip = str(net.network_address + 2 + idx) if len(hosts) > 2 else gateway
-                mac = self._random_mac(rng, vendor)
-                hostname = f"{base_host}.{t['spec'].split('.')[0]}" if "." in t["spec"] else base_host
-                devices.append({
-                    "ip": ip,
-                    "mac": mac,
-                    "hostname": hostname,
-                    "vendor": vendor,
-                    "open_ports": ports,
-                    "device_type": dtype,
-                    "confidence": round(rng.uniform(0.6, 0.98), 2),
-                    "interface": t["spec"],
-                    "network": t["cidr"],
-                    "status": "online",
-                    "last_seen": datetime.now().isoformat(),
-                    "simulated": True,
-                })
-                emit({"phase": "host", "target": t["label"], "progress": idx + 1, "ip": ip})
-                time.sleep(0.02)
-        return devices
-
-    @staticmethod
-    def _random_mac(rng, vendor: str) -> str:
-        for oui, v in get_oui().cache.items():
-            pass
-        # use built-in table mapping
-        from .oui import BUILTIN_OUI
-        match = [k for k, v in BUILTIN_OUI.items() if v.lower() == vendor.lower()]
-        if match:
-            prefix = match[0].replace(":", "")
-        else:
-            prefix = "DE:AD:BE"
-        prefix = prefix.replace(":", "")[:6]
-        suffix = "".join(rng.choice("0123456789ABCDEF") for _ in range(6))
-        return f"{prefix[:2]}:{prefix[2:4]}:{prefix[4:6]}:{suffix[0:2]}:{suffix[2:4]}:{suffix[4:6]}"
 
     # ---------------- helpers ---------------- #
     def _summarize(self, devices: List[Dict]) -> Dict[str, Any]:

@@ -36,10 +36,10 @@ def _emit(update: Dict[str, Any]):
         _progress["log"] = _progress["log"][-60:]
 
 
-def _run_scan(targets, profile, include_offline, demo):
+def _run_scan(targets, profile, include_offline):
     try:
         scanner.scan(targets, profile=profile, include_offline=include_offline,
-                     progress=_emit, demo=demo)
+                     progress=_emit)
     except Exception as e:  # pragma: no cover
         _emit({"phase": "error", "message": str(e)})
 
@@ -75,13 +75,12 @@ def api_scan():
     targets = data.get("targets") or []
     profile = data.get("profile", "basic")
     include_offline = bool(data.get("include_offline", False))
-    demo = bool(data.get("demo", False))
     if not targets:
         return jsonify({"error": "En az bir hedef (arayüz/VLAN/CIDR) girilmeli"}), 400
     _progress.clear()
     _progress.update({"phase": "starting", "log": []})
     _scan_thread = threading.Thread(
-        target=_run_scan, args=(targets, profile, include_offline, demo), daemon=True
+        target=_run_scan, args=(targets, profile, include_offline), daemon=True
     )
     _scan_thread.start()
     return jsonify({"message": "Tarama başlatıldı", "targets": targets})
