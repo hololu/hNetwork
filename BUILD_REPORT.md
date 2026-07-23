@@ -149,3 +149,51 @@ python -m hnetwork.cli --demo      # simülasyon
 ---
 
 *Rapor otomatik olarak Hermes Agent tarafından oluşturuldu. Orijinal kod: `~/calismalar/hnetwork-legacy/`*
+
+---
+
+## 7. GÜNCELLEME — Gerçek Ağ Taraması (root/nmap gerektirmeden)
+
+İlk sürümde demo modu 14 **sahte** cihaz gösteriyordu. Kullanıcı geri bildirimi
+üzerine gerçek tarama etkinleştirildi:
+
+### Yapılan iyileştirmeler
+1. **Saf-Python gerçek tarama motoru** (`_real_scan_pure`) — root/nmap **gerektirmez**:
+   - Eşzamanlı **ping sweep** ile canlı hostları bulur (kernel ARP cache'i dolar)
+   - `ip neigh` / `arp -an` ile **MAC adreslerini** okur
+   - Saf-Python **TCP connect() port taraması** (socket)
+2. **Mod seçimi düzeltildi:** demo artık **sadece açıkça istendiğinde** çalışır;
+   varsayılan olarak gerçek tarama yapılır (root+nmap varsa scapy/nmap, yoksa saf-Python).
+3. **Tam IEEE OUI veritabanı** (`data/ieee_oui.json`, 39.782 üretici) entegre edildi;
+   `download_ieee_oui()` ile güncellenebilir.
+4. **Vendor bazlı cihaz tipi** kuralları eklendi (QNAP→NAS, VMware/Proxmox→VM,
+   Espressif→IoT, Ingenico→POS, Dell/Intel→Computer).
+5. Rastgele/lokal MAC tespiti ("Randomized MAC").
+
+### Gerçek tarama sonucu (kullanıcının ağı: 10.10.22.0/24)
+```
+TOPLAM CANLI CİHAZ: 68        (demo: 14 → gerçek: 68)
+Tarama süresi: ~7 saniye (root/nmap YOK)
+
+Vendor tespiti:  56 bilinmeyen → sadece 6 bilinmeyen (IEEE OUI sayesinde)
+
+Cihaz tipleri:
+   17  Computer          4  Router           1  Access Point
+   15  Virtual Machine   3  Unknown          1  POS Terminal
+   11  Server            2  Network Gear     1  IP Camera
+    8  IoT Device        2  NAS              1  Raspberry Pi
+                         2  Desktop
+```
+Gerçek hostname'ler de çözüldü: `pi.hole`, `muzik.lan`, `_gateway`,
+`dsib122pylsm.dsibim.local`, `desktop-mod9dbk` vb.
+
+### Kullanım (gerçek tarama artık varsayılan)
+```bash
+python -m hnetwork.cli 10.10.22.0/24          # gerçek tarama (saf-python)
+python -m hnetwork.cli enp0s25 enp0s25.10     # çoklu arayüz + VLAN
+python -m hnetwork.cli 10.10.22.0/24 --demo   # (isterseniz) simülasyon
+# Web arayüzünde "Demo Mod" butonu yerine "Taramayı Başlat" gerçek tarar.
+```
+> Daha derin tespit (servis versiyonu, OS) için root + nmap kurulabilir;
+> uygulama otomatik olarak scapy/nmap motoruna geçer.
+
