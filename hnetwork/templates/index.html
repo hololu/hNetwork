@@ -421,8 +421,8 @@ function renderStats(c){
   entries.forEach(([k,v])=>{
     const p=document.createElement('span');
     p.className='pill click'+(state.typeFilter===k?' active':'');
-    p.innerHTML=`${k}: <b>${v}</b>`;
-    p.title=`"${k}" cihazlarını göster`;
+    p.innerHTML=`${tr(k)}: <b>${v}</b>`;
+    p.title=`"${tr(k)}" cihazlarını göster`;
     p.onclick=()=>{ state.typeFilter=(state.typeFilter===k?null:k); state.page=1; renderStats(c); renderDevices(); };
     tb.appendChild(p);
   });
