@@ -64,6 +64,11 @@ DEFAULTS: Dict[str, Any] = {
             {"pattern": r"Petkit.*", "type": "Pet Feeder"},
             {"pattern": r"Espressif.*|Xiaomi.*|Tuya.*", "type": "IoT Device"},
             {"pattern": r"Hikvision.*|Dahua.*", "type": "IP Camera"},
+            {"pattern": r"QNAP.*|Synology.*", "type": "NAS"},
+            {"pattern": r"VMware.*|Proxmox.*|QEMU.*|Xen.*", "type": "Virtual Machine"},
+            {"pattern": r"PLANET.*|Ubiquiti.*|MikroTik.*", "type": "Network Gear"},
+            {"pattern": r"Ingenico.*|Verifone.*", "type": "POS Terminal"},
+            {"pattern": r"Dell.*|Hewlett.*|Lenovo.*|Intel.*", "type": "Computer"},
         ],
         "port_rules": {
             "554": "IP Camera",

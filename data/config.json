@@ -207,6 +207,26 @@
       {
         "pattern": "Hikvision.*|Dahua.*",
         "type": "IP Camera"
+      },
+      {
+        "pattern": "QNAP.*|Synology.*",
+        "type": "NAS"
+      },
+      {
+        "pattern": "VMware.*|Proxmox.*|QEMU.*|Xen.*",
+        "type": "Virtual Machine"
+      },
+      {
+        "pattern": "PLANET.*|Ubiquiti.*|MikroTik.*",
+        "type": "Network Gear"
+      },
+      {
+        "pattern": "Ingenico.*|Verifone.*",
+        "type": "POS Terminal"
+      },
+      {
+        "pattern": "Dell.*|Hewlett.*|Lenovo.*|Intel.*",
+        "type": "Computer"
       }
     ],
     "port_rules": {

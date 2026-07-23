@@ -8,6 +8,7 @@ venv/
 # Runtime data (kept locally)
 data/oui_cache.json
 data/scan_results.json
+data/config.json
 
 # Editor / OS
 .vscode/

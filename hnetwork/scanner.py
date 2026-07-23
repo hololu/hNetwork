@@ -98,13 +98,21 @@ class Scanner:
         emit({"phase": "start", "targets": [t["label"] for t in expanded], "total_hosts": total_hosts})
 
         try:
-            if demo or (not _have_privileges()) or (not _have_nmap()):
-                reason = "demo" if demo else ("no-root" if not _have_privileges() else "no-nmap")
-                emit({"phase": "notice", "mode": "simulated", "reason": reason,
-                      "message": "Gerçek tarama için root + nmap gerekir; simülasyon modunda çalışılıyor."})
+            if demo:
+                emit({"phase": "notice", "mode": "simulated", "reason": "demo",
+                      "message": "Demo modu: simüle cihazlar üretiliyor (gerçek ağ taranmıyor)."})
                 devices = self._simulate(expanded, emit)
             else:
-                devices = self._real_scan(expanded, ports, include_offline, emit)
+                has_root = _have_privileges()
+                has_nmap = _have_nmap()
+                if has_root and has_nmap:
+                    emit({"phase": "notice", "mode": "real",
+                          "message": "Gerçek tarama (ARP + nmap) başlıyor."})
+                    devices = self._real_scan(expanded, ports, include_offline, emit)
+                else:
+                    emit({"phase": "notice", "mode": "real-lite",
+                          "message": "Root/nmap yok → saf-Python gerçek tarama (ping sweep + TCP socket + ARP tablosu)."})
+                    devices = self._real_scan_pure(expanded, ports, include_offline, emit)
         finally:
             self.running = False
 
@@ -148,16 +156,19 @@ class Scanner:
                 })
         return out
 
-    # ---------------- real scan ---------------- #
+    # ---------------- real scan (root + nmap) ---------------- #
     def _real_scan(self, targets, ports, include_offline, emit) -> List[Dict]:
         devices: List[Dict] = []
         for t in targets:
+            if self._stop:
+                break
             net = ipaddress.IPv4Network(t["cidr"])
-            emit({"phase": "discover", "target": t["label"]})
+            emit({"phase": "discover", "target": t["label"], "message": f"Keşif: {t['label']}"})
             live = self._arp_discover(net)
             emit({"phase": "discover-done", "target": t["label"], "found": len(live)})
             with ThreadPoolExecutor(max_workers=self.config.scan.get("max_workers", 64)) as ex:
-                futs = [ex.submit(self._probe_host, ip, mac, t, ports, include_offline) for ip, mac in live]
+                futs = [ex.submit(self._probe_host, h["ip"], h["mac"], t, ports, include_offline)
+                        for h in live]
                 for i, f in enumerate(as_completed(futs), 1):
                     if self._stop:
                         break
@@ -166,6 +177,126 @@ class Scanner:
                         devices.append(dev)
                         emit({"phase": "host", "target": t["label"], "progress": i, "ip": dev["ip"]})
         return devices
+
+    # ---------------- real scan (pure python, no root/nmap) ---------------- #
+    def _real_scan_pure(self, targets, ports, include_offline, emit) -> List[Dict]:
+        """Real scan without root or nmap.
+
+        Strategy per target network:
+          1. Concurrent ping sweep (system `ping`, no privileges needed) to
+             find live hosts. This also fills the kernel ARP/neighbour cache.
+          2. Read MAC addresses from `ip neigh` (ARP table).
+          3. Concurrent pure-python TCP connect() port scan for each live host.
+        """
+        devices: List[Dict] = []
+        max_workers = self.config.scan.get("max_workers", 128)
+        for t in targets:
+            if self._stop:
+                break
+            net = ipaddress.IPv4Network(t["cidr"])
+            hosts = list(net.hosts()) if net.num_addresses > 2 else [net.network_address]
+            # Guard against absurdly large ranges (e.g. /16 = 65k hosts)
+            if len(hosts) > 4096:
+                emit({"phase": "notice",
+                      "message": f"{t['label']} çok geniş ({len(hosts)} host); ilk 4096 host taranıyor."})
+                hosts = hosts[:4096]
+
+            emit({"phase": "discover", "target": t["label"],
+                  "message": f"Ping sweep: {t['label']} ({len(hosts)} host)"})
+
+            # --- 1. ping sweep (find live hosts) ---
+            live_ips: List[str] = []
+            with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                fut = {ex.submit(self._ping, str(ip)): str(ip) for ip in hosts}
+                done = 0
+                for f in as_completed(fut):
+                    if self._stop:
+                        break
+                    done += 1
+                    if f.result():
+                        live_ips.append(fut[f])
+                    if done % 64 == 0:
+                        emit({"phase": "progress", "target": t["label"],
+                              "message": f"{t['label']}: {done}/{len(hosts)} ping, {len(live_ips)} canlı"})
+            live_ips.sort(key=lambda x: tuple(int(p) for p in x.split(".")))
+            emit({"phase": "discover-done", "target": t["label"], "found": len(live_ips),
+                  "message": f"{t['label']}: {len(live_ips)} canlı host bulundu"})
+
+            # --- 2. ARP table (MAC addresses) ---
+            arp_table = self._read_arp_table()
+
+            # --- 3. port scan + enrich each live host ---
+            with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                futs = {ex.submit(self._probe_host_pure, ip, arp_table.get(ip, "Unknown"),
+                                  t, ports, include_offline): ip for ip in live_ips}
+                for i, f in enumerate(as_completed(futs), 1):
+                    if self._stop:
+                        break
+                    dev = f.result()
+                    if dev:
+                        devices.append(dev)
+                        emit({"phase": "host", "target": t["label"], "progress": i, "ip": dev["ip"]})
+        return devices
+
+    def _probe_host_pure(self, ip, mac, target, ports, include_offline) -> Optional[Dict]:
+        open_ports = self._tcp_scan_pure(ip, ports)
+        # host answered ping -> it is online even with no open ports
+        hostname = self._resolve_hostname(ip)
+        vendor = self.oui.lookup(mac)
+        det = detect_device_type(hostname, vendor, open_ports, self.config.detection)
+        return {
+            "ip": ip,
+            "mac": mac,
+            "hostname": hostname,
+            "vendor": vendor,
+            "open_ports": open_ports,
+            "device_type": det["device_type"],
+            "confidence": det["confidence"],
+            "interface": target["spec"],
+            "network": target["cidr"],
+            "status": "online",
+            "last_seen": datetime.now().isoformat(),
+        }
+
+    def _tcp_scan_pure(self, ip: str, ports: List[int], timeout: float = 0.6) -> List[int]:
+        """Pure-python TCP connect scan (no root, no nmap)."""
+        open_ports: List[int] = []
+        for port in ports:
+            if self._stop:
+                break
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(timeout)
+            try:
+                if s.connect_ex((ip, port)) == 0:
+                    open_ports.append(port)
+            except Exception:
+                pass
+            finally:
+                s.close()
+        return open_ports
+
+    def _read_arp_table(self) -> Dict[str, str]:
+        """Read IP->MAC mapping from the kernel neighbour/ARP cache."""
+        table: Dict[str, str] = {}
+        out = None
+        try:
+            res = subprocess.run(["ip", "neigh", "show"], capture_output=True, text=True, timeout=5)
+            out = res.stdout
+        except Exception:
+            try:
+                res = subprocess.run(["arp", "-an"], capture_output=True, text=True, timeout=5)
+                out = res.stdout
+            except Exception:
+                out = None
+        if not out:
+            return table
+        import re as _re
+        for line in out.splitlines():
+            ipm = _re.search(r"(\d+\.\d+\.\d+\.\d+)", line)
+            macm = _re.search(r"([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})", line)
+            if ipm and macm:
+                table[ipm.group(1)] = macm.group(1).upper()
+        return table
 
     def _arp_discover(self, net: ipaddress.IPv4Network) -> List[Dict[str, str]]:
         """ARP scan using scapy. Falls back to ping sweep if scapy missing."""
@@ -183,10 +314,11 @@ class Scanner:
                     found.append({"ip": str(ip), "mac": "Unknown"})
         return found
 
-    def _ping(self, ip: str, timeout: float = 0.4) -> bool:
+    def _ping(self, ip: str, timeout: float = 1.0) -> bool:
         try:
-            res = subprocess.run(["ping", "-c", "1", "-W", str(int(timeout)),
-                                  ip], capture_output=True, timeout=timeout + 1)
+            w = max(1, int(round(timeout)))
+            res = subprocess.run(["ping", "-c", "1", "-W", str(w), ip],
+                                 capture_output=True, timeout=w + 2)
             return res.returncode == 0
         except Exception:
             return False

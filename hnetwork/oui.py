@@ -226,7 +226,9 @@ BUILTIN_OUI: Dict[str, str] = {
 class OUILookup:
     def __init__(self, cache_path: str | None = None):
         self.cache_path = cache_path or os.path.join(_data_dir(), "oui_cache.json")
+        self.ieee_path = os.path.join(_data_dir(), "ieee_oui.json")
         self.cache: Dict[str, str] = {}
+        self.ieee: Dict[str, str] = {}
         self._load()
 
     def _load(self):
@@ -235,6 +237,12 @@ class OUILookup:
                 self.cache = json.load(fh)
         except Exception:
             self.cache = {}
+        # Load the full IEEE OUI database if present (39k+ vendors)
+        try:
+            with open(self.ieee_path, "r", encoding="utf-8") as fh:
+                self.ieee = json.load(fh)
+        except Exception:
+            self.ieee = {}
 
     def _save(self):
         try:
@@ -253,21 +261,29 @@ class OUILookup:
         mac = self._normalize(mac)
         if not mac or mac in ("UNKNOWN", "00:00:00:00:00:00"):
             return "Unknown"
-        # Try 3-byte OUI first, then 4-byte (OUI-36) and 5-byte (CID).
-        for length in (8, 11, 14):  # "AA:BB:CC" -> 8 chars, etc.
+        bare = mac.replace(":", "")
+        # Locally administered / random MAC (2nd hex nibble is 2,6,A,E)
+        if len(bare) >= 2 and bare[1] in ("2", "6", "A", "E"):
+            random_hint = True
+        else:
+            random_hint = False
+        prefix6 = bare[:6]
+        # 1) full IEEE database (most accurate)
+        if prefix6 in self.ieee:
+            return _clean_vendor(self.ieee[prefix6])
+        # 2) built-in compact table (works offline without IEEE file)
+        for length in (8, 11, 14):
             key = mac[:length]
             if key in self.cache:
                 return self.cache[key]
             if key in BUILTIN_OUI:
                 return BUILTIN_OUI[key]
-            # also try with separators removed (some tables store AABBCCDDEE)
-        # bare form
-        bare = mac.replace(":", "")
         for length in (6, 9, 12):
             key = bare[:length]
             if key in BUILTIN_OUI:
                 return BUILTIN_OUI[key]
-        # store Unknown to avoid repeated work
+        if random_hint:
+            return "Randomized MAC"
         self.cache[mac[:8]] = "Unknown"
         if len(self.cache) % 25 == 0:
             self._save()
@@ -275,6 +291,61 @@ class OUILookup:
 
 
 _oui = None
+
+
+def _clean_vendor(name: str) -> str:
+    """Shorten long IEEE org names to a friendly vendor label."""
+    if not name:
+        return "Unknown"
+    n = name.strip().strip('"')
+    # drop common corporate suffixes
+    for suf in [", Inc.", " Inc.", ", Ltd.", " Ltd.", " Co., Ltd.", " Corporation",
+                " Technologies", " Technology", " Electronics", ", LLC", " LLC",
+                " GmbH", " Company", " Corp.", " Corp"]:
+        if n.endswith(suf):
+            n = n[: -len(suf)]
+            break
+    return n.strip() or "Unknown"
+
+
+def download_ieee_oui(dest: str | None = None, url: str = "https://standards-oui.ieee.org/oui/oui.csv") -> int:
+    """Download & parse the full IEEE OUI CSV into ieee_oui.json.
+
+    Returns the number of records written. Requires network + (requests or curl).
+    """
+    import csv
+    import io
+    import subprocess as _sp
+
+    dest = dest or os.path.join(_data_dir(), "ieee_oui.json")
+    raw = None
+    try:
+        import requests
+        raw = requests.get(url, timeout=30).text
+    except Exception:
+        try:
+            res = _sp.run(["curl", "-s", "-m", "30", url], capture_output=True, text=True, timeout=35)
+            raw = res.stdout
+        except Exception:
+            raw = None
+    if not raw:
+        raise RuntimeError("IEEE OUI indirilemedi (ağ veya curl/requests yok)")
+
+    db: Dict[str, str] = {}
+    reader = csv.reader(io.StringIO(raw))
+    next(reader, None)
+    for row in reader:
+        if len(row) >= 3:
+            oui = row[1].strip().upper()
+            org = row[2].strip().strip('"')
+            if len(oui) == 6:
+                db[oui] = org
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    with open(dest, "w", encoding="utf-8") as fh:
+        json.dump(db, fh, ensure_ascii=False)
+    global _oui
+    _oui = None  # force reload
+    return len(db)
 
 
 def get_oui() -> OUILookup:
