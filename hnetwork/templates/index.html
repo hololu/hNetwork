@@ -192,7 +192,7 @@
             </span>
           </h2>
           <input type="text" id="search" placeholder="🔍 Ara (ip, host, vendor, tip)…" style="width:100%;margin-bottom:10px">
-          <div style="max-height:520px;overflow:auto">
+          <div>
             <table id="tbl">
               <thead><tr><th>Durum</th><th>IP</th><th>MAC</th><th>Hostname</th><th>Vendor</th><th>Tip</th><th>Portlar</th></tr></thead>
               <tbody id="tbody"><tr><td colspan="7" class="empty">Henüz tarama yapılmadı.</td></tr></tbody>
@@ -222,6 +222,43 @@
 
 <script>
 const state = { targets: new Set(), devices: [], typeFilter: null, ifaces: [], vlans: [], page: 1, pageSize: 25 };
+
+// --- Türkçe metin çevirileri ---
+const TR = {
+  online:'Çevrimiçi', offline:'Çevrimdışı',
+  Unknown:'Bilinmiyor', Computer:'Bilgisayar', Server:'Sunucu',
+  'Virtual Machine':'Sanal Makine', 'IoT Device':'IoT Cihazı',
+  Router:'Yönlendirici', 'NAS':'Ağ Depolama (NAS)', 'IP Camera':'IP Kamera',
+  'Smart TV':'Akıllı TV', Printer:'Yazıcı', 'Smartphone':'Akıllı Telefon',
+  Laptop:'Dizüstü', 'Desktop':'Masaüstü', 'Access Point':'Erişim Noktası',
+  Switch:'Anahtar (Switch)', 'Raspberry Pi':'Raspberry Pi', 'POS Terminal':'POS Cihazı',
+  'Network Gear':'Ağ Cihazı', 'Gaming Console':'Oyun Konsolu',
+  'Randomized MAC':'Rastgele MAC', 'Mobile Device':'Mobil Cihaz', 'Media Player':'Medya Oynatıcı',
+};
+function tr(s){ return s && TR[s] ? TR[s] : (s||'—'); }
+
+// --- TCP/UDP port -> Türkçe servis adı ---
+const PORT_TR = {
+  20:'FTP-Veri',21:'FTP',22:'SSH',23:'Telnet',25:'SMTP',53:'DNS',
+  67:'DHCP',68:'DHCP',69:'TFTP',80:'HTTP',110:'POP3',111:'RPC',
+  123:'NTP',135:'MS-RPC',137:'NetBIOS',138:'NetBIOS',139:'NetBIOS/SMB',
+  143:'IMAP',161:'SNMP',162:'SNMP-Trap',179:'BGP',389:'LDAP',
+  443:'HTTPS',445:'SMB',465:'SMTPS',500:'IPsec',514:'Syslog',
+  587:'SMTP-TLS',631:'IPP (Yazıcı)',636:'LDAPS',873:'Rsync',
+  993:'IMAPS',995:'POP3S',1433:'MSSQL',1521:'Oracle',
+  1723:'PPTP',1812:'RADIUS',1900:'UPnP',2049:'NFS',
+  3128:'Proxy',3306:'MySQL',3389:'RDP',3690:'SVN',
+  5432:'PostgreSQL',5900:'VNC',5985:'WinRM',5986:'WinRM-TLS',
+  6379:'Redis',6443:'Kubernetes',6667:'IRC',8000:'HTTP-Alt',
+  8001:'HTTP-Alt',8080:'HTTP-Proxy',8443:'HTTPS-Alt',8883:'MQTT-TLS',
+  9000:'HTTP-Alt',9090:'Prometheus',9100:'Node-Exporter',
+  9200:'Elasticsearch',9307:'PlayStation',9418:'Git',11211:'Memcached',
+  27017:'MongoDB',33060:'MySQLX',5000:'UPnP/HTTP',
+};
+function portLabel(p){ return PORT_TR[p] ? `${PORT_TR[p]} (${p})` : `Port ${p}`; }
+
+// --- port türüne göre açılacak referans ---
+function portUrl(p){ return `https://www.speedguide.net/port.php?port=${p}`; }
 
 async function loadInterfaces(){
   try{
@@ -411,11 +448,11 @@ function renderDevices(){
   if(!slice.length){ tb.innerHTML='<tr><td colspan="7" class="empty">Cihaz yok</td></tr>'; renderPager(0,0); return; }
   tb.innerHTML=slice.map(d=>`
     <tr>
-      <td><span class="dot ${d.status==='online'?'on':'off'}"></span>${d.status==='online'?'online':'offline'}</td>
+      <td><span class="dot ${d.status==='online'?'on':'off'}"></span>${tr(d.status)}</td>
       <td>${d.ip}</td><td style="font-family:monospace;font-size:12px">${d.mac||'—'}</td>
       <td>${d.hostname||'—'}</td><td>${d.vendor||'—'}</td>
-      <td class="type-cell"><span class="pill click mini" onclick="quickType('${(d.device_type||'').replace(/'/g,'')}')">${d.device_type||'?'}</span></td>
-      <td class="ports">${(d.open_ports||[]).length ? (d.open_ports||[]).map(p=>`<span class="port-chip">${p}</span>`).join(' ') : '<span class="muted">—</span>'}</td>
+      <td class="type-cell"><span class="pill click mini" onclick="quickType('${(d.device_type||'').replace(/'/g,'')}')">${tr(d.device_type)}</span></td>
+      <td class="ports">${(d.open_ports||[]).length ? (d.open_ports||[]).map(p=>`<a class="port-chip" href="${portUrl(p)}" target="_blank" rel="noopener" title="${portLabel(p)} — yeni sekmede aç">${p}</a>`).join(' ') : '<span class="muted">—</span>'}</td>
     </tr>`).join('');
   renderPager(total, pages);
 }
