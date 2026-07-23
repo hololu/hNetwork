@@ -190,9 +190,13 @@ class Scanner:
         """
         devices: List[Dict] = []
         max_workers = self.config.scan.get("max_workers", 128)
-        for t in targets:
+        n_targets = len(targets)
+        for ti, t in enumerate(targets):
             if self._stop:
                 break
+            # each target occupies an equal slice of the 0-100 bar
+            base = (ti / n_targets) * 100 if n_targets else 0
+            span = (1 / n_targets) * 100 if n_targets else 100
             net = ipaddress.IPv4Network(t["cidr"])
             hosts = list(net.hosts()) if net.num_addresses > 2 else [net.network_address]
             # Guard against absurdly large ranges (e.g. /16 = 65k hosts)
@@ -201,10 +205,11 @@ class Scanner:
                       "message": f"{t['label']} çok geniş ({len(hosts)} host); ilk 4096 host taranıyor."})
                 hosts = hosts[:4096]
 
-            emit({"phase": "discover", "target": t["label"],
+            total = max(1, len(hosts))
+            emit({"phase": "discover", "target": t["label"], "percent": round(base, 1),
                   "message": f"Ping sweep: {t['label']} ({len(hosts)} host)"})
 
-            # --- 1. ping sweep (find live hosts) ---
+            # --- 1. ping sweep (find live hosts) : slice 0-55% of this target ---
             live_ips: List[str] = []
             with ThreadPoolExecutor(max_workers=max_workers) as ex:
                 fut = {ex.submit(self._ping, str(ip)): str(ip) for ip in hosts}
@@ -215,17 +220,20 @@ class Scanner:
                     done += 1
                     if f.result():
                         live_ips.append(fut[f])
-                    if done % 64 == 0:
-                        emit({"phase": "progress", "target": t["label"],
-                              "message": f"{t['label']}: {done}/{len(hosts)} ping, {len(live_ips)} canlı"})
+                    if done % 16 == 0 or done == total:
+                        pct = base + span * 0.55 * (done / total)
+                        emit({"phase": "progress", "target": t["label"], "percent": round(pct, 1),
+                              "message": f"{t['label']}: {done}/{total} ping · {len(live_ips)} canlı"})
             live_ips.sort(key=lambda x: tuple(int(p) for p in x.split(".")))
             emit({"phase": "discover-done", "target": t["label"], "found": len(live_ips),
+                  "percent": round(base + span * 0.55, 1),
                   "message": f"{t['label']}: {len(live_ips)} canlı host bulundu"})
 
             # --- 2. ARP table (MAC addresses) ---
             arp_table = self._read_arp_table()
 
-            # --- 3. port scan + enrich each live host ---
+            # --- 3. port scan + enrich : slice 55-100% of this target ---
+            n_live = max(1, len(live_ips))
             with ThreadPoolExecutor(max_workers=max_workers) as ex:
                 futs = {ex.submit(self._probe_host_pure, ip, arp_table.get(ip, "Unknown"),
                                   t, ports, include_offline): ip for ip in live_ips}
@@ -235,7 +243,11 @@ class Scanner:
                     dev = f.result()
                     if dev:
                         devices.append(dev)
-                        emit({"phase": "host", "target": t["label"], "progress": i, "ip": dev["ip"]})
+                    pct = base + span * (0.55 + 0.45 * (i / n_live))
+                    emit({"phase": "host", "target": t["label"], "progress": i,
+                          "percent": round(pct, 1), "device_count": len(devices),
+                          "ip": dev["ip"] if dev else ""})
+        emit({"phase": "scanning-done", "percent": 100.0})
         return devices
 
     def _probe_host_pure(self, ip, mac, target, ports, include_offline) -> Optional[Dict]:

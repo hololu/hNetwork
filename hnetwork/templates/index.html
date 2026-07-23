@@ -59,6 +59,20 @@
     .ports{font-size:11px;color:var(--muted)}
     .empty{color:var(--muted);text-align:center;padding:40px}
     a{color:var(--accent2)}
+    /* --- UI enhancements --- */
+    .iface.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+    .iface-head{display:flex;align-items:center;gap:8px;cursor:pointer}
+    .iface-head input{cursor:pointer}
+    .vlan-row{margin-top:6px}
+    .vlan.on{border-color:var(--accent);color:var(--accent);background:rgba(96,165,250,.12)}
+    .pill.click{cursor:pointer;transition:all .12s;user-select:none}
+    .pill.click:hover{border-color:var(--accent);transform:translateY(-1px)}
+    .pill.click.active{background:var(--accent);border-color:var(--accent);color:#06121f;font-weight:600}
+    .pill.mini{font-size:10px;padding:1px 7px}
+    button.sm{font-size:11px;padding:4px 8px}
+    .filter-info{font-size:12px;font-weight:400;color:var(--muted);margin-left:8px}
+    .filter-info .clearf{cursor:pointer;color:var(--accent);text-decoration:underline;margin-left:4px}
+    #bar{transition:width .3s ease}
   </style>
 </head>
 <body>
@@ -76,6 +90,12 @@
       <div>
         <div class="card">
           <h2>Arayüzler & VLAN</h2>
+          <div class="row" style="margin-bottom:8px;gap:6px">
+            <button class="ghost sm" id="selAll">☑ Tümünü Seç</button>
+            <button class="ghost sm" id="selNone">☐ Temizle</button>
+            <button class="ghost sm" id="selLocal">🖧 Yerel ağlar</button>
+            <button class="ghost sm" id="refreshIf">⟳ Yenile</button>
+          </div>
           <div id="ifaces"><div class="empty">Yükleniyor…</div></div>
           <div class="row" style="margin-top:10px">
             <input type="text" id="customTarget" placeholder="eth0, eth0.10, 10.0.0.0/24" style="flex:1;min-width:160px">
@@ -101,6 +121,10 @@
             <button class="ghost" id="demoBtn">Demo Mod</button>
           </div>
           <div class="progress"><div id="bar"></div></div>
+          <div class="row" style="justify-content:space-between;margin-top:6px">
+            <span class="muted" id="progText" style="font-size:12px">Hazır</span>
+            <span class="muted" id="progPct" style="font-size:12px;font-weight:600">0%</span>
+          </div>
         </div>
 
         <div class="card">
@@ -124,7 +148,7 @@
         </div>
 
         <div class="card">
-          <h2>Cihazlar</h2>
+          <h2>Cihazlar <span id="filterInfo" class="filter-info"></span></h2>
           <input type="text" id="search" placeholder="🔍 Ara (ip, host, vendor, tip)…" style="width:100%;margin-bottom:10px">
           <div style="max-height:520px;overflow:auto">
             <table id="tbl">
@@ -138,38 +162,76 @@
   </div>
 
 <script>
-const state = { targets: new Set(), devices: [] };
+const state = { targets: new Set(), devices: [], typeFilter: null, ifaces: [], vlans: [] };
 
 async function loadInterfaces(){
   try{
     const [ifR, vlR] = await Promise.all([fetch('/api/interfaces').then(r=>r.json()), fetch('/api/vlans').then(r=>r.json())]);
+    state.ifaces = ifR; state.vlans = vlR;
     const box = document.getElementById('ifaces');
     box.innerHTML = '';
-    if(!ifR.length){ box.innerHTML = '<div class="empty">Arayüz bulunamadı</div>'; }
+    if(!ifR.length){ box.innerHTML = '<div class="empty">Arayüz bulunamadı</div>'; return; }
     const vlanByParent = {};
     vlR.forEach(v=>{ (vlanByParent[v.parent]=vlanByParent[v.parent]||[]).push(v); });
     ifR.forEach(i=>{
       const el = document.createElement('div');
-      el.className='iface';
-      const vlans = (vlanByParent[i.name]||[]).map(v=>`<span class="vlan" data-t="${i.name}.${v.vlan_id}">VLAN ${v.vlan_id}</span>`).join('') || '<span class="muted">—</span>';
+      el.className='iface'; el.dataset.iface=i.name;
+      const vlans = (vlanByParent[i.name]||[]).map(v=>{
+        const t=`${i.name}.${v.vlan_id}`;
+        return `<span class="vlan" data-t="${t}">VLAN ${v.vlan_id}</span>`;
+      }).join('') || '<span class="muted">VLAN yok</span>';
+      const hasIp = i.ip && i.ip!=='—';
       el.innerHTML = `
-        <div class="top"><span class="name">${i.name}</span><span class="tag">${i.type}</span></div>
-        <div class="meta">${i.ip} · ${i.cidr}${i.default_gw?' · gw '+i.default_gw:''}</div>
-        <label><input type="checkbox" class="ifchk" value="${i.name}"> Bu arayüzü tara</label>
-        <div style="margin-top:6px">${vlans}</div>`;
+        <label class="iface-head">
+          <input type="checkbox" class="ifchk" value="${i.name}" ${hasIp?'':'disabled'}>
+          <span class="name">${i.name}</span><span class="tag">${i.type}</span>
+        </label>
+        <div class="meta">${hasIp? i.ip+' · '+i.cidr : '<span class="muted">IP yok</span>'}${i.default_gw?' · gw '+i.default_gw:''}</div>
+        <div class="vlan-row">${vlans}</div>`;
       box.appendChild(el);
     });
     box.querySelectorAll('.ifchk').forEach(c=>c.addEventListener('change',e=>{
-      if(e.target.checked) addTarget(e.target.value); else removeTarget(e.target.value);
+      const iface=e.target.closest('.iface');
+      if(e.target.checked){ addTarget(e.target.value); iface.classList.add('sel'); }
+      else { removeTarget(e.target.value); iface.classList.remove('sel'); }
     }));
     box.querySelectorAll('.vlan').forEach(v=>v.addEventListener('click',e=>{
-      const t=e.target.getAttribute('data-t'); addTarget(t); e.target.style.borderColor='var(--accent)'; e.target.style.color='var(--accent)';
+      const t=e.target.getAttribute('data-t');
+      if(state.targets.has(t)){ removeTarget(t); e.target.classList.remove('on'); }
+      else { addTarget(t); e.target.classList.add('on'); }
     }));
+    syncInterfaceUI();
   }catch(e){ document.getElementById('ifaces').innerHTML='<div class="empty">Hata: '+e+'</div>'; }
 }
 
-function addTarget(t){ state.targets.add(t); renderSelected(); }
-function removeTarget(t){ state.targets.delete(t); renderSelected(); }
+// keep checkbox / vlan visuals in sync with state.targets
+function syncInterfaceUI(){
+  document.querySelectorAll('#ifaces .iface').forEach(el=>{
+    const chk=el.querySelector('.ifchk');
+    if(chk){ chk.checked=state.targets.has(chk.value); el.classList.toggle('sel',chk.checked); }
+  });
+  document.querySelectorAll('#ifaces .vlan').forEach(v=>{
+    v.classList.toggle('on', state.targets.has(v.getAttribute('data-t')));
+  });
+}
+
+// --- bulk selection buttons ---
+document.getElementById('selAll').onclick=()=>{
+  state.ifaces.forEach(i=>{ if(i.ip&&i.ip!=='—') addTarget(i.name); });
+  syncInterfaceUI();
+};
+document.getElementById('selNone').onclick=()=>{
+  state.targets.clear(); renderSelected(); syncInterfaceUI();
+};
+document.getElementById('selLocal').onclick=()=>{
+  // add the CIDR of every interface that has an IP (scan the whole subnet)
+  state.ifaces.forEach(i=>{ if(i.cidr&&i.cidr!=='—') addTarget(i.cidr); });
+  syncInterfaceUI();
+};
+document.getElementById('refreshIf').onclick=loadInterfaces;
+
+function addTarget(t){ state.targets.add(t); renderSelected(); syncInterfaceUI(); }
+function removeTarget(t){ state.targets.delete(t); renderSelected(); syncInterfaceUI(); }
 
 function renderSelected(){
   const box=document.getElementById('selected');
@@ -202,25 +264,38 @@ async function startScan(demo){
 let pollTimer=null;
 function poll(){
   fetch('/api/progress').then(r=>r.json()).then(p=>{
-    if(p.phase==='done'||p.phase==='error'){ setRunning(false); refreshDevices(); }
-    else if(scanner_running()){ pollTimer=setTimeout(poll,700); }
     updateProgress(p);
-  }).catch(()=>{ if(scanner_running()) pollTimer=setTimeout(poll,1500); });
+    if(p.phase==='done'||p.phase==='error'){ setRunning(false); setProgress(100,'Tamamlandı'); refreshDevices(); }
+    else if(scanner_running()){ pollTimer=setTimeout(poll,500); }
+  }).catch(()=>{ if(scanner_running()) pollTimer=setTimeout(poll,1200); });
 }
 function scanner_running(){ return document.getElementById('startBtn').disabled; }
+
+function setProgress(pct, text){
+  pct=Math.max(0,Math.min(100,pct));
+  document.getElementById('bar').style.width=pct+'%';
+  document.getElementById('progPct').textContent=Math.round(pct)+'%';
+  if(text!==undefined) document.getElementById('progText').textContent=text;
+}
+
 function updateProgress(p){
-  if(p.message) pushLog(p.message);
+  if(typeof p.percent==='number'){
+    let txt=p.message || p.phase || 'Taranıyor…';
+    if(p.device_count!=null) txt=`${p.device_count} cihaz · ${p.message||''}`;
+    setProgress(p.percent, txt);
+  } else if(p.message){
+    document.getElementById('progText').textContent=p.message;
+  }
   if(p.targets){ document.getElementById('sTargets').textContent=p.targets.length; }
   const log=document.getElementById('log');
   if(p.log){ log.innerHTML=p.log.map(l=>`<div>[${l.t}] ${l.msg}</div>`).join(''); log.scrollTop=log.scrollHeight; }
-  if(p.notice){ document.getElementById('notice').innerHTML=`<div class="notice">⚠️ ${p.notice.message||''}</div>`; document.getElementById('mode').textContent='mod: simülasyon'; }
-  if(p.phase==='discover-done') pushLog(`Keşif tamam: ${p.target} → ${p.found} cihaz`);
+  if(p.notice){ document.getElementById('notice').innerHTML=`<div class="notice">⚠️ ${p.notice.message||''}</div>`; }
 }
 function setRunning(on){
   document.getElementById('startBtn').disabled=on;
   document.getElementById('stopBtn').disabled=!on;
   document.getElementById('demoBtn').disabled=on;
-  if(on){ document.getElementById('bar').style.width='5%'; }
+  if(on){ setProgress(2,'Başlatılıyor…'); }
 }
 function pushLog(m){ const log=document.getElementById('log'); log.innerHTML+=`<div>[${new Date().toLocaleTimeString()}] ${m}</div>`; log.scrollTop=log.scrollHeight; }
 
@@ -235,24 +310,44 @@ function renderStats(c){
   document.getElementById('sOnline').textContent=c.online||0;
   document.getElementById('sTypes').textContent=Object.keys(c.by_type||{}).length;
   const tb=document.getElementById('typeBreak'); tb.innerHTML='';
-  Object.entries(c.by_type||{}).forEach(([k,v])=>{ const p=document.createElement('span'); p.className='pill'; p.innerHTML=`${k}: <b>${v}</b>`; tb.appendChild(p); });
+  const entries=Object.entries(c.by_type||{}).sort((a,b)=>b[1]-a[1]);
+  // "Tümü" pill to clear the filter
+  const all=document.createElement('span');
+  all.className='pill click'+(state.typeFilter===null?' active':'');
+  all.innerHTML=`Tümü: <b>${c.total||0}</b>`;
+  all.onclick=()=>{ state.typeFilter=null; renderStats(c); renderDevices(); };
+  tb.appendChild(all);
+  entries.forEach(([k,v])=>{
+    const p=document.createElement('span');
+    p.className='pill click'+(state.typeFilter===k?' active':'');
+    p.innerHTML=`${k}: <b>${v}</b>`;
+    p.title=`"${k}" cihazlarını göster`;
+    p.onclick=()=>{ state.typeFilter=(state.typeFilter===k?null:k); renderStats(c); renderDevices(); };
+    tb.appendChild(p);
+  });
+  state._lastCounts=c;
 }
 function renderDevices(){
   const q=document.getElementById('search').value.toLowerCase();
   const tb=document.getElementById('tbody');
   const list=state.devices.filter(d=>{
+    if(state.typeFilter && d.device_type!==state.typeFilter) return false;
     if(!q) return true; return [d.ip,d.hostname,d.vendor,d.device_type,d.mac].filter(Boolean).some(x=>x.toLowerCase().includes(q));
   });
+  const fInfo=document.getElementById('filterInfo');
+  if(fInfo) fInfo.innerHTML = state.typeFilter ? `Filtre: <b>${state.typeFilter}</b> (${list.length}) <span class="clearf">✕ temizle</span>` : '';
+  if(fInfo && state.typeFilter){ fInfo.querySelector('.clearf').onclick=()=>{ state.typeFilter=null; if(state._lastCounts) renderStats(state._lastCounts); renderDevices(); }; }
   if(!list.length){ tb.innerHTML='<tr><td colspan="7" class="empty">Cihaz yok</td></tr>'; return; }
   tb.innerHTML=list.map(d=>`
     <tr>
       <td><span class="dot ${d.status==='online'?'on':'off'}"></span>${d.status==='online'?'online':'offline'}</td>
       <td>${d.ip}</td><td style="font-family:monospace;font-size:12px">${d.mac||'—'}</td>
       <td>${d.hostname||'—'}</td><td>${d.vendor||'—'}</td>
-      <td class="type-cell">${d.device_type||'?'}</td>
+      <td class="type-cell"><span class="pill click mini" onclick="quickType('${(d.device_type||'').replace(/'/g,'')}')">${d.device_type||'?'}</span></td>
       <td class="ports">${(d.open_ports||[]).join(', ')||'—'}</td>
     </tr>`).join('');
 }
+function quickType(t){ state.typeFilter=t||null; if(state._lastCounts) renderStats(state._lastCounts); renderDevices(); window.scrollTo({top:0,behavior:'smooth'}); }
 document.getElementById('search').addEventListener('input',renderDevices);
 document.getElementById('startBtn').onclick=()=>startScan(false);
 document.getElementById('demoBtn').onclick=()=>startScan(true);
