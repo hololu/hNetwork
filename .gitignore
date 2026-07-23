@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Runtime data (kept locally)
+data/oui_cache.json
+data/scan_results.json
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
