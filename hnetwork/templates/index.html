@@ -282,13 +282,15 @@ async function loadInterfaces(){
         return `<span class="vlan" data-t="${t}">VLAN ${v.vlan_id}</span>`;
       }).join('') || '<span class="muted">VLAN yok</span>';
       const hasIp = i.ip && i.ip!=='—';
-      el.innerHTML = `
-        <label class="iface-head">
-          <input type="checkbox" class="ifchk" value="${i.name}" ${hasIp?'':'disabled'}>
-          <span class="name">${i.name}</span><span class="tag">${i.type}</span>
-        </label>
-        <div class="meta">${hasIp? i.ip+' · '+i.cidr : '<span class="muted">IP yok</span>'}${i.default_gw?' · gw '+i.default_gw:''}</div>
-        <div class="vlan-row">${vlans}</div>`;
+      const head=document.createElement('label'); head.className='iface-head';
+      const chk=document.createElement('input'); chk.type='checkbox'; chk.className='ifchk'; chk.value=i.name; if(!hasIp) chk.disabled=true;
+      const nameSpan=document.createElement('span'); nameSpan.className='name'; nameSpan.textContent=i.name;
+      const tagSpan=document.createElement('span'); tagSpan.className='tag'; tagSpan.textContent=i.type;
+      head.appendChild(chk); head.appendChild(nameSpan); head.appendChild(tagSpan);
+      const meta=document.createElement('div'); meta.className='meta'; meta.textContent=hasIp? (i.ip+' · '+i.cidr) : 'IP yok';
+      if(i.default_gw) meta.textContent+=' · gw '+i.default_gw;
+      const vrow=document.createElement('div'); vrow.className='vlan-row'; vrow.innerHTML=vlans;
+      el.appendChild(head); el.appendChild(meta); el.appendChild(vrow);
       box.appendChild(el);
     });
     box.querySelectorAll('.ifchk').forEach(c=>c.addEventListener('change',e=>{
@@ -389,15 +391,15 @@ function updateProgress(p){
   }
   if(p.targets){ document.getElementById('sTargets').textContent=p.targets.length; }
   const log=document.getElementById('log');
-  if(p.log){ log.innerHTML=p.log.map(l=>`<div>[${l.t}] ${l.msg}</div>`).join(''); log.scrollTop=log.scrollHeight; }
-  if(p.notice){ document.getElementById('notice').innerHTML=`<div class="notice">⚠️ ${p.notice.message||''}</div>`; }
+  if(p.log){ log.textContent=''; p.log.forEach(l=>{ const d=document.createElement('div'); d.textContent=`[${l.t}] ${l.msg}`; log.appendChild(d); }); log.scrollTop=log.scrollHeight; }
+  if(p.notice){ const n=document.getElementById('notice'); n.textContent=''; const dv=document.createElement('div'); dv.className='notice'; dv.textContent='⚠️ '+(p.notice.message||''); n.appendChild(dv); }
 }
 function setRunning(on){
   document.getElementById('startBtn').disabled=on;
   document.getElementById('stopBtn').disabled=!on;
   if(on){ setProgress(2,'Başlatılıyor…'); }
 }
-function pushLog(m){ const log=document.getElementById('log'); log.innerHTML+=`<div>[${new Date().toLocaleTimeString()}] ${m}</div>`; log.scrollTop=log.scrollHeight; }
+function pushLog(m){ const log=document.getElementById('log'); const d=document.createElement('div'); d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`; log.appendChild(d); log.scrollTop=log.scrollHeight; }
 
 async function refreshDevices(){
   const r=await fetch('/api/results').then(r=>r.json());
@@ -415,14 +417,16 @@ function renderStats(c){
   // "Tümü" pill to clear the filter
   const all=document.createElement('span');
   all.className='pill click'+(state.typeFilter===null?' active':'');
-  all.innerHTML=`Tümü: <b>${c.total||0}</b>`;
+  all.appendChild(document.createTextNode('Tümü: '));
+  const allB=document.createElement('b'); allB.textContent=c.total||0; all.appendChild(allB);
   all.onclick=()=>{ state.typeFilter=null; state.page=1; renderStats(c); renderDevices(); };
   tb.appendChild(all);
   entries.forEach(([k,v])=>{
     const p=document.createElement('span');
     p.className='pill click'+(state.typeFilter===k?' active':'');
-    p.innerHTML=`${tr(k)}: <b>${v}</b>`;
-    p.title=`"${tr(k)}" cihazlarını göster`;
+    p.appendChild(document.createTextNode(tr(k)+': '));
+    const b=document.createElement('b'); b.textContent=v; p.appendChild(b);
+    p.title=tr(k)+' cihazlarını göster';
     p.onclick=()=>{ state.typeFilter=(state.typeFilter===k?null:k); state.page=1; renderStats(c); renderDevices(); };
     tb.appendChild(p);
   });
@@ -446,19 +450,46 @@ function renderDevices(){
   const slice=list.slice(start, ps?start+ps:undefined);
 
   const fInfo=document.getElementById('filterInfo');
-  if(fInfo) fInfo.innerHTML = state.typeFilter ? `Filtre: <b>${state.typeFilter}</b> (${total}) <span class="clearf">✕ temizle</span>` : '';
-  if(fInfo && state.typeFilter){ fInfo.querySelector('.clearf').onclick=()=>{ state.typeFilter=null; if(state._lastCounts) renderStats(state._lastCounts); renderDevices(); }; }
+  if(fInfo) fInfo.textContent = state.typeFilter ? `Filtre: ${state.typeFilter} (${total})` : '';
+  if(fInfo && state.typeFilter){
+    const clr=document.createElement('span'); clr.className='clearf'; clr.textContent='✕ temizle';
+    clr.onclick=()=>{ state.typeFilter=null; if(state._lastCounts) renderStats(state._lastCounts); renderDevices(); };
+    fInfo.appendChild(clr);
+  }
 
   const tb=document.getElementById('tbody');
   if(!slice.length){ tb.innerHTML='<tr><td colspan="7" class="empty">Cihaz yok</td></tr>'; renderPager(0,0); return; }
-  tb.innerHTML=slice.map(d=>`
-    <tr>
-      <td><span class="dot ${d.status==='online'?'on':'off'}"></span>${tr(d.status)}</td>
-      <td>${d.ip}</td><td style="font-family:monospace;font-size:12px">${d.mac||'—'}</td>
-      <td>${d.hostname||'—'}</td><td>${d.vendor||'—'}</td>
-      <td class="type-cell"><span class="pill click mini" onclick="quickType('${(d.device_type||'').replace(/'/g,'')}')">${tr(d.device_type)}</span></td>
-      <td class="ports">${(d.open_ports||[]).length ? (d.open_ports||[]).map(p=>`<a class="port-chip" href="${portUrl(d.ip, p)}" target="_blank" rel="noopener" title="${portLabel(p)} — yeni sekmede aç">${p}</a>`).join(' ') : '<span class="muted">—</span>'}</td>
-    </tr>`).join('');
+  tb.innerHTML='';
+  slice.forEach(d=>{
+    const tr=document.createElement('tr');
+    const status=document.createElement('td');
+    const dot=document.createElement('span');
+    dot.className='dot '+(d.status==='online'?'on':'off');
+    status.appendChild(dot);
+    status.appendChild(document.createTextNode(tr(d.status)));
+    const ip=document.createElement('td'); ip.textContent=d.ip||'';
+    const mac=document.createElement('td'); mac.style.fontFamily='monospace'; mac.style.fontSize='12px'; mac.textContent=d.mac||'—';
+    const host=document.createElement('td'); host.textContent=d.hostname||'—';
+    const vend=document.createElement('td'); vend.textContent=d.vendor||'—';
+    const typeTd=document.createElement('td'); typeTd.className='type-cell';
+    const pill=document.createElement('span');
+    pill.className='pill click mini'; pill.textContent=tr(d.device_type);
+    pill.onclick=()=>quickType(d.device_type);
+    typeTd.appendChild(pill);
+    const ports=document.createElement('td'); ports.className='ports';
+    if((d.open_ports||[]).length){
+      (d.open_ports||[]).forEach(p=>{
+        const a=document.createElement('a');
+        a.className='port-chip'; a.href=portUrl(d.ip,p); a.target='_blank'; a.rel='noopener';
+        a.title=portLabel(p)+' — yeni sekmede aç'; a.textContent=p;
+        ports.appendChild(a); ports.appendChild(document.createTextNode(' '));
+      });
+    } else {
+      const s=document.createElement('span'); s.className='muted'; s.textContent='—'; ports.appendChild(s);
+    }
+    [status,ip,mac,host,vend,typeTd,ports].forEach(c=>tr.appendChild(c));
+    tb.appendChild(tr);
+  });
   renderPager(total, pages);
 }
 
@@ -528,8 +559,8 @@ function renderSchedule(s){
   if(!s.enabled){ info.textContent='Kapalı'; info.style.color='var(--muted)'; return; }
   const mins=Math.round(s.interval/60*10)/10;
   const tgt=(s.targets||[]).length;
-  info.innerHTML=`✅ Etkin · her ${mins} dk · ${tgt} hedef`+
-    (s.last_run?`<br>Son tarama: ${new Date(s.last_run).toLocaleTimeString()}`:'');
+  info.textContent=`✅ Etkin · her ${mins} dk · ${tgt} hedef`;
+  if(s.last_run){ info.appendChild(document.createElement('br')); info.appendChild(document.createTextNode('Son tarama: '+new Date(s.last_run).toLocaleTimeString())); }
   info.style.color='var(--accent)';
 }
 document.getElementById('schedEnabled').addEventListener('change',pushSchedule);
