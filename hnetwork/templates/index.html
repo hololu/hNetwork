@@ -525,14 +525,15 @@ function closeDeviceModal(){ document.getElementById('deviceModal').style.displa
 function rescanDevicePorts(){
   if(!_modalDevice) return;
   const ip=_modalDevice.ip; const st=document.getElementById('dmRescanStatus');
+  const raw=document.getElementById('dmPortRange').value.trim();
   st.textContent='Portlar taranıyor…';
-  fetch('/api/device/'+encodeURIComponent(ip)+'/ports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})})
+  fetch('/api/device/'+encodeURIComponent(ip)+'/ports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ports:raw})})
     .then(r=>r.json()).then(r=>{
       if(r.error){ st.textContent='Hata: '+r.error; return; }
       const pl=document.getElementById('dmPorts'); pl.innerHTML='';
       (r.open_ports||[]).forEach(p=>{ const a=document.createElement('a'); a.className='port-chip'; a.href=portUrl(ip,p); a.target='_blank'; a.rel='noopener'; a.title=portLabel(p); a.textContent=p; pl.appendChild(a); pl.appendChild(document.createTextNode(' ')); });
       if(!(r.open_ports||[]).length){ const s=document.createElement('span'); s.className='muted'; s.textContent='—'; pl.appendChild(s); }
-      st.textContent='✅ '+r.open_ports.length+' port bulundu';
+      st.textContent='✅ '+r.open_ports.length+' port bulundu'+(r.scanned?' ('+r.scanned+' tarandı)':'');
       if(_modalDevice) _modalDevice.open_ports=r.open_ports;
       refreshDevices();
     }).catch(e=>{ st.textContent='Hata: '+e; });
@@ -651,8 +652,8 @@ setInterval(()=>{ if(!scanner_running()){ fetch('/api/results').then(r=>r.json()
 loadInterfaces();
 </script>
 <!-- Cihaz Detay Modal -->
-<div id="deviceModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center">
-  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;max-width:560px;width:92%;max-height:88vh;overflow:auto;padding:22px">
+<div id="deviceModal" style="display:none;position:fixed;inset:0;background:rgba(10,12,20,0.82);z-index:9999;align-items:center;justify-content:center" onclick="if(event.target===this)closeDeviceModal()">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;max-width:580px;width:94%;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <h3 style="margin:0;font-size:17px">🔍 Cihaz Detayı</h3>
       <button class="ghost sm" onclick="closeDeviceModal()" style="font-size:18px;padding:2px 10px">✕</button>
@@ -672,8 +673,12 @@ loadInterfaces();
       <div class="muted" style="font-size:12px;margin-bottom:6px">Açık Portlar</div>
       <div id="dmPorts" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     </div>
-    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn sm" onclick="rescanDevicePorts()">🔄 Portları Yeniden Tara</button>
+    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <label class="muted" style="font-size:12px">Port aralığı:</label>
+      <input id="dmPortRange" type="text" placeholder="örn: 1-1000, 22, 80, 443, 3389" style="flex:1;min-width:160px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px">
+      <button class="btn sm" onclick="rescanDevicePorts()">🔄 Yeniden Tara</button>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn sm" onclick="sendWOL()">⚡ WOL Gönder</button>
       <button class="ghost sm" onclick="copyDeviceJSON()">📋 Kopyala</button>
       <button class="ghost sm" onclick="exportDevice('json')">⬇ JSON</button>

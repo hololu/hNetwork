@@ -151,10 +151,34 @@ def api_device_detail(ip):
 
 @app.route("/api/device/<path:ip>/ports", methods=["POST"])
 def api_device_rescan_ports(ip):
-    """Re-scan open ports for a single device using the pure-python scanner."""
-    import json as _json
+    """Re-scan open ports for a single device using the pure-python scanner.
+
+    Optional JSON body: {"ports": "1-1000, 22, 80, 443"} or a list of ints.
+    """
     data = request.get_json(silent=True) or {}
-    ports = data.get("ports") or scanner.config.scan.get("basic_ports", [])
+    ports_arg = data.get("ports")
+    # parse port specification
+    if isinstance(ports_arg, str) and ports_arg.strip():
+        ports = []
+        for part in ports_arg.split(","):
+            part = part.strip()
+            if "-" in part:
+                try:
+                    a, b = part.split("-", 1)
+                    lo, hi = int(a), int(b)
+                    ports.extend(range(lo, hi + 1))
+                except Exception:
+                    pass
+            elif part.isdigit():
+                ports.append(int(part))
+        ports = sorted(set(p for p in ports if 1 <= p <= 65535))
+    elif isinstance(ports_arg, (list, tuple)):
+        ports = [int(p) for p in ports_arg if str(p).isdigit()]
+    else:
+        ports = scanner.config.scan.get("basic_ports", [])
+    # cap scan size to avoid hangs
+    if len(ports) > 2000:
+        ports = ports[:2000]
     try:
         open_ports = scanner._tcp_scan_pure(ip, ports)
     except Exception as e:
@@ -164,7 +188,7 @@ def api_device_rescan_ports(ip):
         if d.get("ip") == ip:
             d["open_ports"] = open_ports
             break
-    return jsonify({"ip": ip, "open_ports": open_ports})
+    return jsonify({"ip": ip, "open_ports": open_ports, "scanned": len(ports)})
 
 
 @app.route("/api/device/<path:ip>/wol", methods=["POST"])
