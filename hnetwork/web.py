@@ -14,6 +14,7 @@ from flask import Flask, jsonify, render_template, request, send_from_directory
 
 from .scanner import Scanner
 from .config import get_config
+from . import __version__
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24).hex())
@@ -83,7 +84,7 @@ def _run_scheduled():
 # ----------------------------- routes ----------------------------- #
 @app.route("/")
 def index():
-    return render_template("index.html", version="2.0.0")
+    return render_template("index.html", version=__version__)
 
 
 @app.route("/api/interfaces")

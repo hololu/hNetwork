@@ -1,8 +1,10 @@
 [project]
-name = "hnetwork"
-version = "2.0.0"
-description = "hnetwork - Multi-interface / multi-VLAN network scanner with a modern web dashboard"
+name = "hNetwork"
+version = "2.0.1"
+description = "hNetwork - Multi-interface / multi-VLAN network scanner with a modern web dashboard"
 readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Mustafa ÖZKAYA", email = "mustafa@ozkaya.local" }]
 requires-python = ">=3.9"
 dependencies = [
     "flask>=3.0.0",
@@ -10,6 +12,10 @@ dependencies = [
     "python-nmap>=0.7.1",
     "psutil>=5.9.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/hololu/hNetwork"
+Repository = "https://github.com/hololu/hNetwork"
 
 [project.optional-dependencies]
 # Optional, only needed for live online vendor fallback

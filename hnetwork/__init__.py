@@ -1,5 +1,10 @@
-"""hnetwork - multi-interface / multi-VLAN network scanner."""
+"""hNetwork - multi-interface / multi-VLAN network scanner.
 
-__version__ = "2.0.0"
+Copyright (c) 2026 Mustafa ÖZKAYA
+Licensed under the MIT License (see LICENSE).
+"""
 
-APP_NAME = "hnetwork"
+__version__ = "2.0.1"
+
+APP_NAME = "hNetwork"
+COPYRIGHT = "© 2026 Mustafa ÖZKAYA"

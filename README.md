@@ -1,6 +1,8 @@
-# hnetwork 🌐
+# hNetwork 🌐
 
 **Çoklu arayüz + çoklu VLAN destekli, modern ağ tarayıcı** (eski `my_network_scanner` projesinin sıfırdan yeniden yazılmış hâli).
+
+> © 2026 Mustafa ÖZKAYA · MIT Lisansı · [github.com/hololu/hNetwork](https://github.com/hololu/hNetwork)
 
 ## Özellikler
 - ✅ **Çoklu arayüz taraması** — `eth0`, `wlan0`, `docker0` ... hepsini tek seferde tarayın
@@ -19,7 +21,13 @@
   - Arama kutusu (IP, host, vendor, tip)
   - **TXT / CSV / JSON export**
   - **Periyodik otomatik tarama** zamanlayıcısı (1dk–1sa aralık)
+- ✅ **Cihaz Detay Modalı** (listeden satıra tıkla):
+  - IP, MAC, Hostname, Üretici, Tür, Durum, Ağ, Arayüz, Son görülme
+  - **Port yeniden tarama** — taranacak **port aralığını girebilirsiniz** (`1-1000, 22, 80, 443, 3389`)
+  - **Wake-on-LAN (WOL)** — cihazı uzaktan uyandırma
+  - **Kopyala** (tek cihaz JSON) ve **Export** (TXT / JSON)
 - ✅ CLI aracı (`hnetwork eth0 eth0.10 10.0.0.0/24`)
+- ✅ **Docker desteği** — multi-arch (amd64 + arm64), `host` network modu
 
 ## Kurulum
 ```bash
@@ -51,7 +59,8 @@ hnetwork --update-oui                  # IEEE'den online güncelle
 - **Tarama Seçenekleri** — profil (basic/full), çevrimdışı dahil, "Taramayı Başlat"
 - **Periyodik Otomatik Tarama** — etkin + aralık seç → arka planda tekrarlanan tarama
 - **Cihazlar** — sayfa boyutu seçici, TXT/CSV/JSON export, tür pill filtresi, arama
-- **Özet** — toplam/çevrimiçi/hedet/tip sayıları + tür dağılımı (tıklanabilir)
+- **Cihaza tıkla** → Detay penceresi: port aralığı gir + "Yeniden Tara", "WOL Gönder", "Kopyala", "Export"
+- **Özet** — toplam/çevrimiçi/hedef/tip sayıları + tür dağılımı (tıklanabilir)
 
 ## Mimari
 ```
@@ -63,7 +72,8 @@ hnetwork/
 ├── scanner.py     # ana tarama motoru (çoklu hedef, gerçek tarama)
 ├── web.py         # Flask uygulaması + REST API + periyodik scheduler
 ├── cli.py         # komut satırı aracı
-└── templates/     # modern web arayüzü (tema + sayfalama + export)
+├── bump_version.py# versiyon otomatik artış scripti
+└── templates/     # modern web arayüzü (tema + sayfalama + modal + export)
 ```
 
 ## REST API
@@ -74,20 +84,38 @@ hnetwork/
 | `POST /api/scan` | Tarama başlat (`{targets, profile, include_offline}`) |
 | `GET /api/progress` | Canlı ilerleme (gerçek yüzde) |
 | `POST /api/stop` | Taramayı durdur |
-| `GET /api/results` | Bulunan cihazlar (tümü) |
+| `GET /api/results` | Bulunan cihazlar (tümü, özet dahil) |
 | `GET /api/devices` | Bulunan cihazlar (liste) |
+| `GET /api/device/<ip>` | Tek cihaz detayı |
+| `POST /api/device/<ip>/ports` | Tek cihaz port yeniden tarama (`{ports:"1-1000,22,80"}`) |
+| `POST /api/device/<ip>/wol` | Tek cihaza WOL magic packet gönder |
 | `GET /api/export/<fmt>` | Export: `txt` / `csv` / `json` (dosya indirir) |
 | `GET/POST /api/schedule` | Periyodik tarama durumu/ayarı |
 
-## Uzak Depoya Gönderme (push)
-Proje yerel `~/calismalar/hnetwork` git deposudur. Uzak bir depoya göndermek için:
+## Versiyon Yönetimi
+Her derleme/push öncesi patch versiyonunu otomatik artırın:
 ```bash
-git remote add origin <repo-url>   # ilk kez
-git branch -M main
-git push -u origin main
+python bump_version.py          # 2.0.0 -> 2.0.1 (patch)
+python bump_version.py --minor  # 2.0.0 -> 2.1.0 (minor)
+python bump_version.py --major  # 2.0.0 -> 3.0.0 (major)
 ```
-Yedeği diske almak için (runtime veritabanı hariç):
+Script `hnetwork/__init__.py` ve `pyproject.toml` içindeki versiyonu senkron günceller.
+
+## Docker (Proxmox / CasaOS)
+Çoklu arayüz + VLAN taraması için `host` network modu önerilir.
 ```bash
-tar --exclude='.venv' --exclude='__pycache__' --exclude='.git' \
-    -czf ~/hnetwork_backup.tar.gz -C ~ calismalar/hnetwork
+# 1) Build + run (Proxmox x86_64 veya CasaOS/Pi ARM64)
+docker build -t hnetwork:local .
+docker run -d --name hnetwork --network host --restart unless-started \
+  -v hnetwork-data:/app/data hnetwork:local
+# → http://<sunucu-IP>:5883
 ```
+Detaylı rehber: [README_DOCKER.md](README_DOCKER.md)
+
+## Geliştirme İş Akışı
+- **Kod yazımı:** Aider (qwen2.5-coder:7b, 2080 Ti GPU) ile `diff` edit-format
+- **Koordinasyon:** Hermes Agent (commit / push / Docker / test / rapor)
+- OpenCode ve Claude Code kullanılmamaktadır (credential/config sorunları)
+
+## Lisans
+MIT — bkz. [LICENSE](LICENSE). © 2026 Mustafa ÖZKAYA.
