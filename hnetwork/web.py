@@ -223,7 +223,7 @@ def api_config_update():
 
 # ----------------------------- main ----------------------------- #
 def run(host="0.0.0.0", port=5883, debug=False):
-    app.run(host=host, port=port, debug=debug, use_reloader=False)
+    app.run(host=host, port=port, debug=debug, use_reloader=False, threaded=True)
 
 
 if __name__ == "__main__":
