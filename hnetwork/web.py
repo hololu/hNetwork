@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import json
+import socket
 import threading
 from datetime import datetime
 from typing import Any, Dict
@@ -136,6 +137,66 @@ def api_progress():
 def api_devices():
     devices = scanner.last_results.get("devices", [])
     return jsonify(devices)
+
+
+@app.route("/api/device/<path:ip>")
+def api_device_detail(ip):
+    """Return a single device's full record by IP."""
+    devices = scanner.last_results.get("devices", [])
+    for d in devices:
+        if d.get("ip") == ip:
+            return jsonify(d)
+    return jsonify({"error": "Cihaz bulunamadı"}), 404
+
+
+@app.route("/api/device/<path:ip>/ports", methods=["POST"])
+def api_device_rescan_ports(ip):
+    """Re-scan open ports for a single device using the pure-python scanner."""
+    import json as _json
+    data = request.get_json(silent=True) or {}
+    ports = data.get("ports") or scanner.config.scan.get("basic_ports", [])
+    try:
+        open_ports = scanner._tcp_scan_pure(ip, ports)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    # update stored record
+    for d in scanner.last_results.get("devices", []):
+        if d.get("ip") == ip:
+            d["open_ports"] = open_ports
+            break
+    return jsonify({"ip": ip, "open_ports": open_ports})
+
+
+@app.route("/api/device/<path:ip>/wol", methods=["POST"])
+def api_device_wol(ip):
+    """Send a Wake-on-LAN magic packet to the device's MAC."""
+    import struct
+    mac = None
+    for d in scanner.last_results.get("devices", []):
+        if d.get("ip") == ip:
+            mac = d.get("mac")
+            break
+    if not mac or mac in ("Unknown", "—", ""):
+        return jsonify({"error": "MAC adresi yok"}), 400
+    try:
+        mac_bytes = bytes.fromhex(mac.replace(":", "").replace("-", ""))
+        if len(mac_bytes) != 6:
+            return jsonify({"error": "Geçersiz MAC"}), 400
+        # magic packet: 6x FF + 16x MAC
+        packet = b"\xff" * 6 + mac_bytes * 16
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        # send to both local broadcast and directed (subnet broadcast via ip)
+        sock.sendto(packet, ("255.255.255.255", 9))
+        try:
+            subnet_bcast = ".".join(ip.split(".")[:3]) + ".255"
+            sock.sendto(packet, (subnet_bcast, 9))
+        except Exception:
+            pass
+        sock.close()
+        return jsonify({"ok": True, "mac": mac, "ip": ip})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/results")
