@@ -461,7 +461,7 @@ function renderDevices(){
   if(!slice.length){ tb.innerHTML='<tr><td colspan="7" class="empty">Cihaz yok</td></tr>'; renderPager(0,0); return; }
   tb.innerHTML='';
   slice.forEach(d=>{
-    const tr=document.createElement('tr');
+    const row=document.createElement('tr');
     const status=document.createElement('td');
     const dot=document.createElement('span');
     dot.className='dot '+(d.status==='online'?'on':'off');
@@ -487,8 +487,8 @@ function renderDevices(){
     } else {
       const s=document.createElement('span'); s.className='muted'; s.textContent='—'; ports.appendChild(s);
     }
-    [status,ip,mac,host,vend,typeTd,ports].forEach(c=>tr.appendChild(c));
-    tb.appendChild(tr);
+    [status,ip,mac,host,vend,typeTd,ports].forEach(c=>row.appendChild(c));
+    tb.appendChild(row);
   });
   renderPager(total, pages);
 }
